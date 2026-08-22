@@ -1,6 +1,6 @@
 document.addEventListener('DOMContentLoaded', () => {
     
-    // UI Elements
+    // Core UI Elements
     const dropzone = document.getElementById('dropzone');
     const uploadBtn = document.getElementById('upload-btn');
     const fileInput = document.getElementById('file-input');
@@ -15,45 +15,50 @@ document.addEventListener('DOMContentLoaded', () => {
     const resultsPanel = document.getElementById('results-panel');
     const zebraMeter = document.getElementById('zebra-meter');
     
-    // Canvas Elements
+    // Tools UI
+    const rulerLeft = document.getElementById('ruler-left');
+    const toggleRulerBtn = document.getElementById('toggle-ruler');
+    const toggleMeasureBtn = document.getElementById('toggle-measure');
+    const btnActualSize = document.getElementById('btn-actual-size');
+    const actualSizeModal = document.getElementById('actual-size-modal');
+    const closeModal = document.getElementById('close-modal');
+    
+    // Canvases
+    const canvasWrapper = document.getElementById('canvas-wrapper');
     const canvas = document.getElementById('pdf-preview');
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
     const overlayCanvas = document.getElementById('error-overlay');
     const overlayCtx = overlayCanvas.getContext('2d');
+    const interactCanvas = document.getElementById('interaction-layer');
+    const interactCtx = interactCanvas.getContext('2d');
+    const actualSizeCanvas = document.getElementById('actual-size-canvas');
     
-    // Application State
+    // State
     let pdfDocument = null;
     let pdfPage = null;
     const TARGET_DPI = 300; 
     const CM_TO_INCHES = 0.393701;
-
-    // --- 1. FILE UPLOAD & INGESTION ---
     
+    // Interaction State
+    let isMeasuring = false;
+    let measurePoints = [];
+
+    // --- 1. UPLOAD & INGESTION ---
     uploadBtn.addEventListener('click', () => fileInput.click());
-    
-    fileInput.addEventListener('change', (e) => {
-        if(e.target.files.length > 0) handleFile(e.target.files[0]);
-    });
-
+    fileInput.addEventListener('change', (e) => { if(e.target.files.length > 0) handleFile(e.target.files[0]); });
     dropzone.addEventListener('dragover', (e) => { e.preventDefault(); dropzone.style.borderColor = 'var(--text-color)'; });
     dropzone.addEventListener('dragleave', () => dropzone.style.borderColor = 'var(--border-color)' );
     dropzone.addEventListener('drop', (e) => {
         e.preventDefault();
-        dropzone.style.borderColor = 'var(--border-color)';
         if(e.dataTransfer.files.length > 0) handleFile(e.dataTransfer.files[0]);
     });
 
     function handleFile(file) {
-        if(file.type !== 'application/pdf') {
-            alert('Format rejected. Please upload a PDF file.');
-            return;
-        }
+        if(file.type !== 'application/pdf') { alert('PDF required.'); return; }
         dropzone.classList.add('hidden');
         previewContainer.classList.remove('hidden');
         loadPDF(file);
     }
-
-    // --- 2. PDF.js RENDERING ---
 
     async function loadPDF(file) {
         try {
@@ -62,8 +67,7 @@ document.addEventListener('DOMContentLoaded', () => {
             pdfPage = await pdfDocument.getPage(1); 
             renderVisualPreview();
         } catch (error) {
-            console.error(error);
-            alert("Failed to read PDF file.");
+            console.error(error); alert("Failed to read PDF file.");
         }
     }
 
@@ -72,17 +76,22 @@ document.addEventListener('DOMContentLoaded', () => {
         const safeScale = Math.min(1500 / unscaledViewport.width, 2.0); 
         const viewport = pdfPage.getViewport({ scale: safeScale });
 
-        canvas.width = viewport.width;
-        canvas.height = viewport.height;
+        canvas.width = viewport.width; canvas.height = viewport.height;
+        overlayCanvas.width = canvas.width; overlayCanvas.height = canvas.height;
+        interactCanvas.width = canvas.width; interactCanvas.height = canvas.height;
         
-        // Reset overlay state when new file is loaded
         zebraMeter.checked = false;
         overlayCanvas.classList.add('hidden');
+        measurePoints = [];
+        interactCtx.clearRect(0,0, interactCanvas.width, interactCanvas.height);
 
-        pdfPage.render({ canvasContext: ctx, viewport: viewport }).promise.then(() => validateForm());
+        pdfPage.render({ canvasContext: ctx, viewport: viewport }).promise.then(() => {
+            updateTools();
+            validateForm();
+        });
     }
 
-    // --- 3. SCALING MATH ---
+    // --- 2. FORMS & TOOLS SETUP ---
 
     printMedium.addEventListener('change', (e) => {
         if(e.target.value === 'custom') customStrokeGroup.classList.remove('hidden');
@@ -90,13 +99,31 @@ document.addEventListener('DOMContentLoaded', () => {
         validateForm();
     });
 
-    widthInput.addEventListener('input', validateForm);
-    heightInput.addEventListener('input', validateForm);
+    widthInput.addEventListener('input', () => { validateForm(); updateTools(); });
+    heightInput.addEventListener('input', () => { validateForm(); updateTools(); });
 
     function validateForm() {
-        if(pdfDocument && widthInput.value > 0 && heightInput.value > 0) analyzeBtn.disabled = false;
-        else analyzeBtn.disabled = true;
+        analyzeBtn.disabled = !(pdfDocument && parseFloat(widthInput.value) > 0 && parseFloat(heightInput.value) > 0);
     }
+
+    function updateTools() {
+        const hCm = parseFloat(heightInput.value);
+        if(!hCm || hCm <= 0) return;
+
+        // Set Ruler scaling
+        const rect = canvas.getBoundingClientRect();
+        // Since canvas CSS height adjusts automatically, we set ruler height to match it
+        rulerLeft.style.height = `${rect.height}px`;
+        const pixelsPerCm = rect.height / hCm;
+        
+        // Use CSS repeating gradient to draw perfect CM ticks
+        rulerLeft.style.backgroundImage = `repeating-linear-gradient(to bottom, transparent, transparent calc(${pixelsPerCm}px - 1px), var(--text-color) calc(${pixelsPerCm}px - 1px), var(--text-color) ${pixelsPerCm}px)`;
+    }
+    
+    // Update ruler on window resize
+    window.addEventListener('resize', updateTools);
+
+    // --- 3. PHYSICS & MATH ---
 
     function calculatePrintPhysics() {
         const physicalWidthCm = parseFloat(widthInput.value);
@@ -113,7 +140,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const pixelsPerMm = TARGET_DPI / 25.4;
         const minimumStrokePixels = minStrokeMm * pixelsPerMm;
 
-        // Size check against selected medium limit
         let maxDimensions = {w: 30, h: 42};
         if(printMedium.value === 'textile-oversize') maxDimensions = {w: 35, h: 45};
         if(printMedium.value === 'tote-bag') maxDimensions = {w: 27, h: 30};
@@ -123,7 +149,7 @@ document.addEventListener('DOMContentLoaded', () => {
                           (physicalWidthCm <= maxDimensions.h && physicalHeightCm <= maxDimensions.w) ||
                           printMedium.value === 'custom';
 
-        return { requiredPdfScale, minimumStrokePixels, sizeValid };
+        return { requiredPdfScale, minimumStrokePixels, sizeValid, physicalWidthCm };
     }
 
     // --- 4. ENGINE ROOM (WEB WORKER) ---
@@ -139,21 +165,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const physics = calculatePrintPhysics();
         
-        // Render High Res off-screen
         const highResCanvas = document.createElement('canvas');
         const highResCtx = highResCanvas.getContext('2d');
         const viewport = pdfPage.getViewport({ scale: physics.requiredPdfScale });
-        highResCanvas.width = viewport.width;
-        highResCanvas.height = viewport.height;
+        highResCanvas.width = viewport.width; highResCanvas.height = viewport.height;
         
         await pdfPage.render({ canvasContext: highResCtx, viewport: viewport }).promise;
         
-        document.getElementById('loading-text').innerText = "Distance transform (Checking strokes)...";
+        document.getElementById('loading-text').innerText = "Distance transform (Morphological Opening)...";
         progressFill.style.width = '20%';
 
         const imageData = highResCtx.getImageData(0, 0, highResCanvas.width, highResCanvas.height);
         
-        // Pass data to worker
         analyzerWorker.postMessage({
             imageData: imageData,
             minStrokePixels: physics.minimumStrokePixels,
@@ -165,7 +188,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     analyzerWorker.onmessage = function(e) {
         if (e.data.type === 'progress') progressFill.style.width = `${e.data.percent}%`;
-        
         if (e.data.type === 'complete') {
             progressFill.style.width = '100%';
             setTimeout(() => applyResults(e.data.results), 400); 
@@ -178,35 +200,142 @@ document.addEventListener('DOMContentLoaded', () => {
         analyzeBtn.classList.remove('hidden');
         analyzeBtn.innerText = "Re-Analyze Printfile";
 
-        // Update UI Text
         document.getElementById('res-size').innerText = results.sizeValid ? "Pass" : "Failed (Exceeds medium limits)";
         document.getElementById('res-size').style.color = results.sizeValid ? "var(--text-color)" : "var(--neon-pink)";
 
-        document.getElementById('res-gray').innerText = results.hasGrayscale ? "Failed (Grayscale found)" : "Pass (Pure Black/White)";
+        document.getElementById('res-gray').innerText = results.hasGrayscale ? "Failed (Grayscale cores found)" : "Pass (Pure Black/White)";
         document.getElementById('res-gray').style.color = results.hasGrayscale ? "var(--neon-pink)" : "var(--text-color)";
 
         document.getElementById('res-stroke').innerText = results.hasThinStrokes ? "Failed (Areas too thin)" : "Pass (Stroke width OK)";
         document.getElementById('res-stroke').style.color = results.hasThinStrokes ? "var(--neon-pink)" : "var(--text-color)";
         
-        // Scale and Draw Neon Overlay onto the display canvas layer
-        overlayCanvas.width = canvas.width;
-        overlayCanvas.height = canvas.height;
-        
         const imgData = new ImageData(new Uint8ClampedArray(results.overlayBuffer), results.width, results.height);
-        
-        // Draw the 300dpi buffer to a temporary canvas so we can use drawImage to perfectly scale it to the preview container
         const tempCanvas = document.createElement('canvas');
-        tempCanvas.width = results.width;
-        tempCanvas.height = results.height;
+        tempCanvas.width = results.width; tempCanvas.height = results.height;
         tempCanvas.getContext('2d').putImageData(imgData, 0, 0);
         
         overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
         overlayCtx.drawImage(tempCanvas, 0, 0, overlayCanvas.width, overlayCanvas.height);
     }
 
-    // Toggle Overlay Visibility
     zebraMeter.addEventListener('change', (e) => {
         if(e.target.checked) overlayCanvas.classList.remove('hidden');
         else overlayCanvas.classList.add('hidden');
     });
+
+    // --- 5. INTERACTIVE MEASUREMENT TOOL ---
+    
+    toggleMeasureBtn.addEventListener('click', () => {
+        isMeasuring = !isMeasuring;
+        if(isMeasuring) {
+            toggleMeasureBtn.innerText = "Measurement Tool: ON";
+            canvasWrapper.classList.add('measuring');
+            toggleMeasureBtn.style.color = "var(--blue)";
+        } else {
+            toggleMeasureBtn.innerText = "Measurement Tool: OFF";
+            canvasWrapper.classList.remove('measuring');
+            toggleMeasureBtn.style.color = "var(--text-color)";
+            measurePoints = [];
+            interactCtx.clearRect(0, 0, interactCanvas.width, interactCanvas.height);
+        }
+    });
+
+    interactCanvas.addEventListener('mousedown', (e) => {
+        if(!isMeasuring) return;
+        const rect = interactCanvas.getBoundingClientRect();
+        
+        // Map mouse click to internal canvas resolution
+        const scaleX = interactCanvas.width / rect.width;
+        const scaleY = interactCanvas.height / rect.height;
+        const x = (e.clientX - rect.left) * scaleX;
+        const y = (e.clientY - rect.top) * scaleY;
+
+        if (measurePoints.length === 2) {
+            measurePoints = []; // reset on 3rd click
+            interactCtx.clearRect(0, 0, interactCanvas.width, interactCanvas.height);
+        }
+        
+        measurePoints.push({x, y});
+        drawMeasurement();
+    });
+
+    interactCanvas.addEventListener('mousemove', (e) => {
+        if(!isMeasuring || measurePoints.length !== 1) return;
+        const rect = interactCanvas.getBoundingClientRect();
+        const scaleX = interactCanvas.width / rect.width;
+        const scaleY = interactCanvas.height / rect.height;
+        const currentX = (e.clientX - rect.left) * scaleX;
+        const currentY = (e.clientY - rect.top) * scaleY;
+        
+        drawMeasurement(currentX, currentY);
+    });
+
+    function drawMeasurement(curX = null, curY = null) {
+        interactCtx.clearRect(0, 0, interactCanvas.width, interactCanvas.height);
+        if (measurePoints.length === 0) return;
+
+        interactCtx.strokeStyle = "#0000FF";
+        interactCtx.fillStyle = "#0000FF";
+        interactCtx.lineWidth = 2;
+        interactCtx.font = "600 16px 'IBM Plex Sans'";
+
+        const p1 = measurePoints[0];
+        const p2 = measurePoints.length === 2 ? measurePoints[1] : {x: curX, y: curY};
+
+        // Draw Line
+        interactCtx.beginPath();
+        interactCtx.moveTo(p1.x, p1.y);
+        interactCtx.lineTo(p2.x, p2.y);
+        interactCtx.stroke();
+        
+        // Draw Points
+        interactCtx.beginPath(); interactCtx.arc(p1.x, p1.y, 4, 0, Math.PI*2); interactCtx.fill();
+        interactCtx.beginPath(); interactCtx.arc(p2.x, p2.y, 4, 0, Math.PI*2); interactCtx.fill();
+
+        // Calculate and Draw Distance
+        const wCm = parseFloat(widthInput.value);
+        if(!wCm) return;
+        
+        const pixelsDistance = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+        const mmPerPixel = (wCm * 10) / interactCanvas.width;
+        const distanceMm = pixelsDistance * mmPerPixel;
+
+        const textX = (p1.x + p2.x) / 2 + 10;
+        const textY = (p1.y + p2.y) / 2 - 10;
+        
+        // Text background for readability
+        const text = distanceMm.toFixed(2) + " mm";
+        const tW = interactCtx.measureText(text).width;
+        interactCtx.fillStyle = "rgba(255,255,255,0.8)";
+        interactCtx.fillRect(textX - 2, textY - 16, tW + 4, 20);
+        
+        interactCtx.fillStyle = "#0000FF";
+        interactCtx.fillText(text, textX, textY);
+    }
+
+    // --- 6. RULER & ACTUAL SIZE MODAL ---
+    
+    toggleRulerBtn.addEventListener('click', () => {
+        rulerLeft.classList.toggle('hidden');
+        updateTools();
+    });
+
+    btnActualSize.addEventListener('click', () => {
+        const wCm = parseFloat(widthInput.value);
+        if(!wCm) return;
+        
+        // 1cm ≈ 37.795 CSS pixels (assuming standard 96dpi display scaling)
+        const cssWidth = wCm * 37.795;
+        
+        actualSizeCanvas.width = canvas.width;
+        actualSizeCanvas.height = canvas.height;
+        actualSizeCanvas.getContext('2d').drawImage(canvas, 0, 0);
+        
+        actualSizeCanvas.style.width = `${cssWidth}px`;
+        actualSizeCanvas.style.height = 'auto'; // Maintain aspect ratio
+        
+        actualSizeModal.classList.remove('hidden');
+    });
+
+    closeModal.addEventListener('click', () => actualSizeModal.classList.add('hidden'));
 });
