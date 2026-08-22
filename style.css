@@ -43,6 +43,16 @@ button { font-family: inherit; font-weight: 500; cursor: pointer; border: none; 
 .w-100 { width: 100%; }
 .hidden { display: none !important; }
 
+/* Dynamic Color Button Logic */
+.btn-dynamic { border-color: currentColor; }
+.btn-dynamic:hover { background-color: currentColor; color: var(--bg-color) !important; }
+
+@keyframes subtleIn {
+    0% { opacity: 0; transform: translateX(-8px) scale(0.96); }
+    100% { opacity: 1; transform: translateX(0) scale(1); }
+}
+.smooth-in { display: inline-block; animation: subtleIn 0.25s cubic-bezier(0.2, 0.8, 0.2, 1) forwards; }
+
 .action-buttons { display: flex; flex-direction: column; gap: 0.5rem; }
 .results-panel { background: var(--panel-color); border: 1px solid var(--border-color); padding: 1.5rem; display: flex; flex-direction: column; gap: 1rem; }
 .result-details { list-style: none; font-size: 0.85rem; line-height: 1.6; }
@@ -75,7 +85,7 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 14px;
 .tiny-input { width: 70px; padding: 0.4rem; font-size: 0.85rem; }
 
 .readout-box { font-size: 0.8rem; font-weight: 600; text-transform: uppercase; display: flex; align-items: center; gap: 0.5rem; border-left: 1px solid var(--border-color); padding-left: 1rem; margin-left: 0.5rem;}
-#measurement-readout, .readout-small { font-family: 'IBM Plex Sans', monospace; color: #0044FF; font-weight: 600; }
+#measurement-readout, .readout-small { font-family: 'IBM Plex Sans', monospace; color: #0044FF; font-weight: 600; transition: color 0.15s; }
 #measurement-readout { font-size: 1.1rem; background: var(--bg-color); padding: 0.2rem 0.5rem; border: 1px solid var(--border-color); min-width: 90px; text-align: right; }
 .readout-small { font-size: 0.95rem; min-width: 45px; }
 
@@ -97,3 +107,8 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 14px;
     transform: translate(-50%, -50%); overflow: hidden; box-shadow: 0 0 0 2px var(--white), 0 4px 12px rgba(0,0,0,0.3);
 }
 #mag-canvas { display: block; }
+
+@media (max-width: 1024px) {
+    .app-container { display: none; }
+    body::before { content: "Desktop processing required."; font-size: 1.5rem; font-weight: 600; text-align: center; margin-top: 20vh; display: block; }
+}
