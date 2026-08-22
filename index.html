@@ -52,15 +52,18 @@
             <div class="parameter-group dual-input">
                 <div class="input-half">
                     <label for="print-width">Width (cm)</label>
-                    <input type="number" id="print-width" placeholder="W" step="0.1">
+                    <input type="number" id="print-width" placeholder="W" step="0.01">
                 </div>
                 <div class="input-half">
                     <label for="print-height">Height (cm)</label>
-                    <input type="number" id="print-height" placeholder="H" step="0.1">
+                    <input type="number" id="print-height" placeholder="H" step="0.01">
                 </div>
             </div>
 
-            <button id="analyze-btn" class="btn-primary" disabled>Analyze Printfile</button>
+            <div class="action-buttons">
+                <button id="analyze-btn" class="btn-primary w-100" disabled>Analyze Printfile</button>
+                <button id="reset-main-btn" class="btn-secondary w-100 hidden">Upload New File</button>
+            </div>
 
             <div id="loading-state" class="loading-state hidden">
                 <p id="loading-text">Analyzing...</p>
@@ -96,7 +99,16 @@
             <div class="toolbar-left">
                 <button id="toggle-measure" class="btn-secondary btn-small">Measurement: OFF</button>
                 <button id="reset-measure" class="btn-secondary btn-small">Reset Line</button>
-                <input type="color" id="measure-color" value="#0044FF" title="Measurement Line Color">
+                
+                <div class="tool-group">
+                    <input type="color" id="measure-color" value="#0044FF" title="Line Color">
+                    <input type="range" id="measure-thickness" min="0.5" max="10" step="0.5" value="2" title="Line Thickness">
+                </div>
+                
+                <div class="readout-box">
+                    Length: <span id="measurement-readout">0.00 mm</span>
+                </div>
+                
                 <span class="tool-hint hidden" id="measure-hint"><em>Hold SHIFT to snap angles.</em></span>
             </div>
             <button id="close-modal" class="btn-primary btn-small">Close Workspace</button>
@@ -111,7 +123,6 @@
                     <canvas id="actual-size-canvas"></canvas>
                     <canvas id="interaction-layer"></canvas>
                     
-                    <!-- Pro Magnifier -->
                     <div id="magnifier" class="hidden">
                         <canvas id="mag-canvas"></canvas>
                     </div>
