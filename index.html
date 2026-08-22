@@ -83,7 +83,7 @@
                     <span class="toggle-label">Highlight Error Areas</span>
                 </div>
 
-                <button id="btn-actual-size" class="btn-primary btn-small w-100">Open Actual Size</button>
+                <button id="btn-actual-size" class="btn-primary btn-small w-100">Open Actual Size & Measure</button>
             </div>
             
             <div class="brand-footer">by splinters.protocol</div>
@@ -95,6 +95,7 @@
         <div class="modal-toolbar">
             <div class="toolbar-left">
                 <button id="toggle-measure" class="btn-secondary btn-small">Measurement: OFF</button>
+                <button id="reset-measure" class="btn-secondary btn-small">Reset Line</button>
                 <input type="color" id="measure-color" value="#0044FF" title="Measurement Line Color">
                 <span class="tool-hint hidden" id="measure-hint"><em>Hold SHIFT to snap angles.</em></span>
             </div>
@@ -110,9 +111,9 @@
                     <canvas id="actual-size-canvas"></canvas>
                     <canvas id="interaction-layer"></canvas>
                     
-                    <!-- New Interactive Magnifier -->
+                    <!-- Pro Magnifier -->
                     <div id="magnifier" class="hidden">
-                        <canvas id="mag-canvas" width="120" height="120"></canvas>
+                        <canvas id="mag-canvas"></canvas>
                     </div>
                 </div>
             </div>
