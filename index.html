@@ -4,30 +4,24 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>printers.protocol</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     <script>pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';</script>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-
-    <header>
-        <h1>printers.protocol</h1>
-        <p>Screenprinting Pre-Flight Analysis</p>
-    </header>
-
     <main class="app-container">
-        
         <!-- LEFT: Preview Area -->
         <section class="visual-panel">
+            <header class="app-header">
+                <h1>printers.protocol</h1>
+                <p>Screenprinting Pre-Flight Analysis</p>
+            </header>
             <div id="dropzone" class="dropzone active">
                 <p>Drag & Drop PDF here</p>
                 <button id="upload-btn" class="btn-secondary">Select File</button>
                 <input type="file" id="file-input" accept="application/pdf" hidden>
             </div>
-            
             <div id="preview-container" class="preview-container hidden">
                 <div class="canvas-wrapper" id="canvas-wrapper">
                     <canvas id="pdf-preview"></canvas>
@@ -39,10 +33,7 @@
         <!-- RIGHT: Control Panel -->
         <section class="control-panel">
             <div class="parameter-group">
-                <label for="print-medium">
-                    Screen Mesh 
-                    <span id="stroke-info" class="stroke-info"></span>
-                </label>
+                <label for="print-medium">Screen Mesh <span id="stroke-info" class="stroke-info"></span></label>
                 <select id="print-medium">
                     <option value="43T" data-min-stroke="0.4">43T Textile Standard (Min: 0.4mm)</option>
                     <option value="55T" data-min-stroke="0.3">54T/55T Textile Fine (Min: 0.3mm)</option>
@@ -60,11 +51,11 @@
 
             <div class="parameter-group dual-input">
                 <div class="input-half">
-                    <label for="print-width">Actual Width (cm)</label>
+                    <label for="print-width">Width (cm)</label>
                     <input type="number" id="print-width" placeholder="W" step="0.1">
                 </div>
                 <div class="input-half">
-                    <label for="print-height">Actual Height (cm)</label>
+                    <label for="print-height">Height (cm)</label>
                     <input type="number" id="print-height" placeholder="H" step="0.1">
                 </div>
             </div>
@@ -72,7 +63,7 @@
             <button id="analyze-btn" class="btn-primary" disabled>Analyze Printfile</button>
 
             <div id="loading-state" class="loading-state hidden">
-                <p id="loading-text">Analyzing pixels...</p>
+                <p id="loading-text">Analyzing...</p>
                 <div class="progress-bar"><div id="progress-fill" class="progress-fill"></div></div>
             </div>
 
@@ -92,16 +83,21 @@
                     <span class="toggle-label">Highlight Error Areas</span>
                 </div>
 
-                <button id="btn-actual-size" class="btn-primary btn-small w-100">Open Actual Size & Measure</button>
+                <button id="btn-actual-size" class="btn-primary btn-small w-100">Open Actual Size</button>
             </div>
+            
+            <div class="brand-footer">by splinters.protocol</div>
         </section>
     </main>
 
     <!-- PRO ACTUAL SIZE WORKSPACE -->
     <div id="actual-size-modal" class="hidden">
         <div class="modal-toolbar">
-            <button id="toggle-measure" class="btn-secondary btn-small">Interactive Measure: OFF</button>
-            <span class="tool-hint hidden" id="measure-hint"><em>Hold SHIFT to snap angles.</em></span>
+            <div class="toolbar-left">
+                <button id="toggle-measure" class="btn-secondary btn-small">Measurement: OFF</button>
+                <input type="color" id="measure-color" value="#0044FF" title="Measurement Line Color">
+                <span class="tool-hint hidden" id="measure-hint"><em>Hold SHIFT to snap angles.</em></span>
+            </div>
             <button id="close-modal" class="btn-primary btn-small">Close Workspace</button>
         </div>
         
@@ -117,8 +113,6 @@
             </div>
         </div>
     </div>
-
-    <div class="brand-footer">by splinters.protocol</div>
 
     <script src="app.js"></script>
 </body>
