@@ -1,0 +1,190 @@
+:root {
+    --bg-color: #b3b6b5; 
+    --panel-color: #c5c8c6; 
+    --text-color: #000000;
+    --border-color: #8c8f8e;
+    --neon-pink: #FF107A;
+    --white: #ffffff;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    font-family: 'IBM Plex Sans', sans-serif;
+    padding: 2rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100vh;
+}
+
+header {
+    width: 100%;
+    max-width: 1200px;
+    margin-bottom: 2rem;
+    border-bottom: 2px solid var(--text-color);
+    padding-bottom: 1rem;
+}
+
+header h1 { font-size: 2rem; font-weight: 600; letter-spacing: -0.5px; }
+
+.app-container {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: 2rem;
+    width: 100%;
+    max-width: 1200px;
+    align-items: start;
+}
+
+.visual-panel {
+    background: var(--panel-color);
+    border: 1px solid var(--border-color);
+    min-height: 600px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 2rem;
+}
+
+.dropzone {
+    text-align: center;
+    width: 80%;
+    border: 2px dashed var(--border-color);
+    padding: 4rem;
+    display: none; 
+}
+
+.dropzone.active { display: block; }
+
+.preview-container {
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.canvas-wrapper {
+    position: relative;
+    display: inline-block;
+    background: var(--white);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+canvas {
+    display: block;
+    max-width: 100%;
+    height: auto;
+}
+
+#error-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    opacity: 0.9;
+}
+
+.control-panel { display: flex; flex-direction: column; gap: 1.5rem; }
+.parameter-group { display: flex; flex-direction: column; gap: 0.5rem; }
+.dual-input { flex-direction: row; gap: 1rem; }
+.input-half { flex: 1; display: flex; flex-direction: column; gap: 0.5rem; }
+
+label {
+    font-size: 0.85rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+input, select {
+    background: var(--bg-color);
+    border: 1px solid var(--border-color);
+    color: var(--text-color);
+    font-family: inherit;
+    padding: 0.75rem;
+    font-size: 1rem;
+    border-radius: 0;
+    outline: none;
+}
+
+input:focus, select:focus { border-color: var(--text-color); }
+
+button {
+    font-family: inherit;
+    font-weight: 500;
+    cursor: pointer;
+    border: none;
+    border-radius: 0;
+    transition: all 0.15s ease;
+}
+
+.btn-secondary {
+    background: transparent;
+    border: 1px solid var(--text-color);
+    color: var(--text-color);
+    padding: 0.5rem 1.5rem;
+    margin-top: 1rem;
+}
+.btn-secondary:hover { background: var(--text-color); color: var(--bg-color); }
+
+.btn-primary {
+    background: var(--text-color);
+    color: var(--bg-color);
+    padding: 1.25rem;
+    font-size: 1.1rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+.btn-primary:hover:not(:disabled) { background: #333; }
+.btn-primary:disabled { background: var(--border-color); cursor: not-allowed; }
+
+.hidden { display: none !important; }
+
+.progress-bar { width: 100%; height: 4px; background: var(--border-color); margin-top: 0.5rem; }
+.progress-fill { width: 0%; height: 100%; background: var(--text-color); transition: width 0.2s ease; }
+
+.results-panel { background: var(--panel-color); border: 1px solid var(--border-color); padding: 1.5rem; }
+.result-details { list-style: none; margin: 1rem 0; font-size: 0.9rem; line-height: 1.6; }
+.fail-text { color: var(--neon-pink); font-weight: 600; }
+
+.zebra-toggle {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-top: 1.5rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border-color);
+}
+.toggle-label { font-weight: 600; color: var(--text-color); }
+
+.switch { position: relative; display: inline-block; width: 44px; height: 24px; }
+.switch input { opacity: 0; width: 0; height: 0; }
+.slider {
+    position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0;
+    background-color: var(--border-color); transition: .2s;
+}
+.slider:before {
+    position: absolute; content: ""; height: 16px; width: 16px; left: 4px; bottom: 4px;
+    background-color: var(--bg-color); transition: .2s;
+}
+input:checked + .slider { background-color: var(--neon-pink); }
+input:checked + .slider:before { transform: translateX(20px); }
+
+/* Desktop Guardrail */
+@media (max-width: 1024px) {
+    .app-container { display: none; }
+    body::before {
+        content: "Please open on a desktop computer. This print analysis engine requires desktop processor speeds.";
+        font-size: 1.5rem;
+        font-weight: 600;
+        text-align: center;
+        margin-top: 20vh;
+        max-width: 600px;
+        line-height: 1.4;
+    }
+}
