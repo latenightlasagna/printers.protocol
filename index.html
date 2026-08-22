@@ -20,6 +20,7 @@
 
     <main class="app-container">
         
+        <!-- LEFT: Preview Area -->
         <section class="visual-panel">
             <div id="dropzone" class="dropzone active">
                 <p>Drag & Drop PDF here</p>
@@ -28,27 +29,27 @@
             </div>
             
             <div id="preview-container" class="preview-container hidden">
-                <canvas id="ruler-canvas" class="hidden"></canvas>
                 <div class="canvas-wrapper" id="canvas-wrapper">
                     <canvas id="pdf-preview"></canvas>
                     <canvas id="error-overlay" class="hidden"></canvas>
-                    <canvas id="interaction-layer"></canvas>
                 </div>
             </div>
         </section>
 
+        <!-- RIGHT: Control Panel -->
         <section class="control-panel">
             <div class="parameter-group">
                 <label for="print-medium">
-                    Print Medium 
+                    Screen Mesh 
                     <span id="stroke-info" class="stroke-info"></span>
                 </label>
                 <select id="print-medium">
-                    <option value="textile-standard" data-min-stroke="0.4">Textile Standard (Max: 30x42cm)</option>
-                    <option value="textile-oversize" data-min-stroke="0.4">Textile Oversize (Max: 35x45cm)</option>
-                    <option value="tote-bag" data-min-stroke="0.4">Tote Bag (Max: 27x30cm)</option>
-                    <option value="poster" data-min-stroke="0.25">Poster / Graphic (Max: 70x100cm)</option>
-                    <option value="custom">Custom...</option>
+                    <option value="43T" data-min-stroke="0.4">43T Textile Standard (Min: 0.4mm)</option>
+                    <option value="55T" data-min-stroke="0.3">54T/55T Textile Fine (Min: 0.3mm)</option>
+                    <option value="77T" data-min-stroke="0.2">77T Paper Standard (Min: 0.2mm)</option>
+                    <option value="90T" data-min-stroke="0.15">90T Graphic Fine (Min: 0.15mm)</option>
+                    <option value="120T" data-min-stroke="0.1">120T Ultra Fine (Min: 0.1mm)</option>
+                    <option value="custom" data-min-stroke="0.4">Custom Thickness...</option>
                 </select>
             </div>
 
@@ -70,13 +71,11 @@
 
             <button id="analyze-btn" class="btn-primary" disabled>Analyze Printfile</button>
 
-            <!-- Loading State -->
             <div id="loading-state" class="loading-state hidden">
                 <p id="loading-text">Analyzing pixels...</p>
                 <div class="progress-bar"><div id="progress-fill" class="progress-fill"></div></div>
             </div>
 
-            <!-- Results State -->
             <div id="results-panel" class="results-panel hidden">
                 <h2 id="result-status">Check Done!</h2>
                 <ul class="result-details">
@@ -93,25 +92,28 @@
                     <span class="toggle-label">Highlight Error Areas</span>
                 </div>
 
-                <div class="tool-toggles">
-                    <button id="toggle-ruler" class="btn-secondary btn-small">Toggle CM Ruler</button>
-                    <button id="toggle-measure" class="btn-secondary btn-small">Measurement Tool: OFF</button>
-                    <button id="btn-actual-size" class="btn-primary btn-small">View Actual Size</button>
-                </div>
-                <p class="tool-hint hidden" id="measure-hint"><em>Hold SHIFT to draw straight lines.</em></p>
+                <button id="btn-actual-size" class="btn-primary btn-small w-100">Open Actual Size & Measure</button>
             </div>
         </section>
     </main>
 
-    <!-- Actual Size Modal -->
+    <!-- PRO ACTUAL SIZE WORKSPACE -->
     <div id="actual-size-modal" class="hidden">
-        <button id="close-modal" class="btn-primary">CLOSE ACTUAL SIZE</button>
-        <div id="actual-size-wrapper">
-            <div class="modal-corner"></div>
-            <canvas id="modal-ruler-top"></canvas>
-            <canvas id="modal-ruler-left"></canvas>
-            <div id="actual-size-container">
-                <canvas id="actual-size-canvas"></canvas>
+        <div class="modal-toolbar">
+            <button id="toggle-measure" class="btn-secondary btn-small">Interactive Measure: OFF</button>
+            <span class="tool-hint hidden" id="measure-hint"><em>Hold SHIFT to snap angles.</em></span>
+            <button id="close-modal" class="btn-primary btn-small">Close Workspace</button>
+        </div>
+        
+        <div class="modal-scroll-area">
+            <div id="actual-size-wrapper">
+                <div class="modal-corner"></div>
+                <canvas id="modal-ruler-top"></canvas>
+                <canvas id="modal-ruler-left"></canvas>
+                <div id="actual-size-container">
+                    <canvas id="actual-size-canvas"></canvas>
+                    <canvas id="interaction-layer"></canvas>
+                </div>
             </div>
         </div>
     </div>
