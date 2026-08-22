@@ -104,8 +104,10 @@
                     <button id="reset-measure" class="btn-secondary btn-small">Reset Line</button>
                     
                     <div class="tool-group">
-                        <input type="color" id="measure-color" value="#0044FF" title="Line Color">
-                        <input type="range" id="measure-thickness" min="0.5" max="10" step="0.5" value="2" title="Line Thickness">
+                        <span class="tool-label" id="label-thickness" title="Double click to reset">Line Thickness:</span>
+                        <input type="range" id="measure-thickness" min="0.5" max="10" step="0.5" value="2">
+                        <span id="thickness-readout" class="readout-small">2.0 pt</span>
+                        <input type="color" id="measure-color" value="#0044FF" title="Line Color" style="margin-left: 0.5rem;">
                     </div>
                     
                     <div class="readout-box">Length: <span id="measurement-readout">0.00 mm</span></div>
@@ -113,6 +115,7 @@
                 </div>
                 
                 <div class="toolbar-right">
+                    <button id="btn-fit-screen" class="btn-secondary btn-small">Fit to Screen</button>
                     <button id="toggle-mockup" class="btn-secondary btn-small">Mockup Mode: OFF</button>
                     <button id="close-modal" class="btn-primary btn-small">Close Workspace</button>
                 </div>
@@ -122,16 +125,16 @@
             <div id="mockup-toolbar" class="modal-toolbar secondary-toolbar hidden">
                 <div class="toolbar-left">
                     <div class="tool-group">
-                        <span class="tool-label">Scale Artwork:</span>
+                        <span class="tool-label" id="label-mockup-scale" title="Double click to reset">Scale Artwork:</span>
                         <input type="range" id="mockup-scale" min="10" max="200" step="1" value="100">
                         <span id="scale-readout" class="readout-small">100%</span>
                     </div>
                     <div class="tool-group">
-                        <span class="tool-label">X Pos (cm):</span>
+                        <span class="tool-label" id="label-mockup-x" title="Double click to reset">Center X (cm):</span>
                         <input type="number" id="mockup-x" step="0.5" class="tiny-input">
                     </div>
                     <div class="tool-group">
-                        <span class="tool-label">Y Pos (cm):</span>
+                        <span class="tool-label" id="label-mockup-y" title="Double click to reset">Center Y (cm):</span>
                         <input type="number" id="mockup-y" step="0.5" class="tiny-input">
                     </div>
                 </div>
