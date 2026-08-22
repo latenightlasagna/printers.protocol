@@ -10,13 +10,13 @@ self.onmessage = function(e) {
     let hasThinStrokes = false;
     
     const overlayData = new Uint8ClampedArray(data.length);
-    const grid = new Float32Array(w * h); // Fixed Array Type
+    const grid = new Float32Array(w * h); 
     
     // STEP 1: Thresholding
     for (let i = 0; i < data.length; i += 4) {
-        if (data[i+3] < 128) continue; // Skip transparency
+        if (data[i+3] < 128) continue; 
         const brightness = (data[i] + data[i+1] + data[i+2]) / 3;
-        if (brightness < 200) grid[(i / 4)] = 1; // Mark as Ink
+        if (brightness < 200) grid[(i / 4)] = 1; 
     }
     
     // Safety Padding
@@ -76,7 +76,6 @@ self.onmessage = function(e) {
             let i = y * w + x;
             if (DT2[i] !== 0) DT2[i] = Math.min(DT2[i], DT2[i+1]+1, DT2[i+w+1]+1, DT2[i+w]+1, DT2[i+w-1]+1);
 
-            // Final Thin Stroke Flagging
             if (grid[i] === 1 && DT2[i] > radiusThreshold) {
                 hasThinStrokes = true;
                 overlayData[i*4] = 255; overlayData[i*4+1] = 16; overlayData[i*4+2] = 122; overlayData[i*4+3] = 255;
