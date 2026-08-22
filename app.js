@@ -12,15 +12,19 @@ document.addEventListener('DOMContentLoaded', () => {
     const resultsPanel = document.getElementById('results-panel');
     const loadingState = document.getElementById('loading-state');
     
-    // Pro Modal Tools
+    // Settings & Mockup Tools
+    const printMedium = document.getElementById('print-medium');
+    const customStrokeInput = document.getElementById('custom-stroke');
+    const customStrokeGroup = document.getElementById('custom-stroke-group');
+    
     const toggleMeasureBtn = document.getElementById('toggle-measure');
     const resetMeasureBtn = document.getElementById('reset-measure');
     const measureColor = document.getElementById('measure-color');
     const measureThickness = document.getElementById('measure-thickness');
     const measurementReadout = document.getElementById('measurement-readout');
     
-    // Mockup Tools
     const btnActualSize = document.getElementById('btn-actual-size');
+    const actualSizeModal = document.getElementById('actual-size-modal');
     const toggleMockupBtn = document.getElementById('toggle-mockup');
     const mockupToolbar = document.getElementById('mockup-toolbar');
     const mockupScale = document.getElementById('mockup-scale');
@@ -48,7 +52,7 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Memory & Constants
     let pdfDocument = null, pdfPage = null;
-    let cachedArtworkCanvas = document.createElement('canvas'); // For ultra-fast scale redrawing
+    let cachedArtworkCanvas = document.createElement('canvas'); 
     const mockupImg = new Image();
     mockupImg.src = 'tshirt_sewingpattern.png';
     
@@ -56,14 +60,24 @@ document.addEventListener('DOMContentLoaded', () => {
     const CM_TO_INCHES = 0.393701;
     const PX_PER_CM = 37.795275; 
     const DPR = window.devicePixelRatio || 1; 
-    const MOCKUP_W = 60, MOCKUP_H = 80; // Size S 60x80cm physical bounding box
+    const MOCKUP_W = 60, MOCKUP_H = 80; 
     
-    // State
     let isMeasuringMode = false, isDrawingLine = false;
     let isMockupMode = false;
     let p1 = null, p2 = null;
     let lastMouseCssX = 0, lastMouseCssY = 0;
     let artWidthCm = 0, artHeightCm = 0;
+
+    // --- 0. SETTINGS LOGIC ---
+    function updateStrokeInfo() {
+        const opt = printMedium.options[printMedium.selectedIndex];
+        let min = opt.value === 'custom' ? parseFloat(customStrokeInput.value) : parseFloat(opt.getAttribute('data-min-stroke'));
+        opt.value === 'custom' ? customStrokeGroup.classList.remove('hidden') : customStrokeGroup.classList.add('hidden');
+        document.getElementById('stroke-info').innerText = `(Min: ${min || 0} mm)`;
+    }
+    printMedium.addEventListener('change', updateStrokeInfo);
+    customStrokeInput.addEventListener('input', updateStrokeInfo);
+    updateStrokeInfo();
 
     // --- 1. UPLOAD & RESET LOGIC ---
     uploadBtn.addEventListener('click', () => fileInput.click());
@@ -95,14 +109,13 @@ document.addEventListener('DOMContentLoaded', () => {
         canvas.height = overlayCanvas.height = viewport.height;
         await pdfPage.render({ canvasContext: ctx, viewport: viewport }).promise;
         
-        // Setup default mockup positioning based on extracted size (Centered, 10cm from top)
         mockupX.value = Math.max(0, (MOCKUP_W - artWidthCm) / 2).toFixed(1);
         mockupY.value = 10;
         
         validateForm();
     }
 
-    resetMainBtn.addEventListener('click', () => location.reload()); // Safest reset
+    resetMainBtn.addEventListener('click', () => location.reload());
 
     [widthInput, heightInput].forEach(el => el.addEventListener('input', () => {
         artWidthCm = parseFloat(widthInput.value) || 0;
@@ -114,27 +127,35 @@ document.addEventListener('DOMContentLoaded', () => {
         analyzeBtn.disabled = !(pdfDocument && artWidthCm > 0 && artHeightCm > 0);
     }
 
-    // --- 2. WORKSPACE RENDER ENGINE (MOCKUP CAPABLE) ---
+    // --- 2. WORKSPACE RENDER ENGINE ---
     btnActualSize.addEventListener('click', async () => {
         if(!artWidthCm || !artHeightCm) return;
         
-        // Cache high-res artwork at exact 1:1 Physical Scale for fast redrawing
-        const cssWidth = artWidthCm * PX_PER_CM, cssHeight = artHeightCm * PX_PER_CM;
-        cachedArtworkCanvas.width = cssWidth * DPR; 
-        cachedArtworkCanvas.height = cssHeight * DPR;
-        const reqScale = (cssWidth * DPR) / pdfPage.getViewport({scale: 1}).width;
-        
-        await pdfPage.render({ 
-            canvasContext: cachedArtworkCanvas.getContext('2d'), 
-            viewport: pdfPage.getViewport({scale: reqScale}) 
-        }).promise;
-        
-        renderWorkspace();
-        actualSizeModal.classList.remove('hidden');
+        try {
+            // ALWAYS request a fresh page instance to bypass pdf.js RenderTask state locks
+            const freshPage = await pdfDocument.getPage(1);
+            
+            const cssWidth = artWidthCm * PX_PER_CM;
+            const cssHeight = artHeightCm * PX_PER_CM;
+            
+            cachedArtworkCanvas.width = cssWidth * DPR; 
+            cachedArtworkCanvas.height = cssHeight * DPR;
+            const reqScale = (cssWidth * DPR) / freshPage.getViewport({scale: 1}).width;
+            
+            await freshPage.render({ 
+                canvasContext: cachedArtworkCanvas.getContext('2d'), 
+                viewport: freshPage.getViewport({scale: reqScale}) 
+            }).promise;
+            
+            renderWorkspace();
+            actualSizeModal.classList.remove('hidden');
+        } catch (err) {
+            console.error("Workspace Render Error:", err);
+            alert("Failed to render the workspace. Please reload the file.");
+        }
     });
 
     function renderWorkspace() {
-        // Define canvas sizing based on mode
         const targetW_Cm = isMockupMode ? MOCKUP_W : artWidthCm;
         const targetH_Cm = isMockupMode ? MOCKUP_H : artHeightCm;
         
@@ -149,12 +170,10 @@ document.addEventListener('DOMContentLoaded', () => {
         actualCtx.clearRect(0, 0, actualSizeCanvas.width, actualSizeCanvas.height);
         
         if (isMockupMode) {
-            // Draw Grey BG & Mockup T-Shirt
             actualCtx.fillStyle = 'var(--bg-color)';
             actualCtx.fillRect(0, 0, actualSizeCanvas.width, actualSizeCanvas.height);
             if (mockupImg.complete) actualCtx.drawImage(mockupImg, 0, 0, actualSizeCanvas.width, actualSizeCanvas.height);
             
-            // Draw Scaled / Positioned Artwork
             const scaleFactor = parseFloat(mockupScale.value) / 100;
             const destW = cachedArtworkCanvas.width * scaleFactor;
             const destH = cachedArtworkCanvas.height * scaleFactor;
@@ -163,14 +182,12 @@ document.addEventListener('DOMContentLoaded', () => {
             actualCtx.drawImage(cachedArtworkCanvas, destX, destY, destW, destH);
             actualSizeContainer.style.background = "var(--bg-color)";
         } else {
-            // Standard 1:1 view
             actualCtx.drawImage(cachedArtworkCanvas, 0, 0);
             actualSizeContainer.style.background = "var(--white)";
         }
 
         renderRulers(targetW_Cm, targetH_Cm, cssWidth, cssHeight);
         
-        // Force redraw of interactive line if exists to fit new canvas map
         if(p1 && p2 && !isDrawingLine) renderLine(p1, p2);
     }
 
@@ -208,11 +225,9 @@ document.addEventListener('DOMContentLoaded', () => {
         toggleMockupBtn.innerText = `Mockup Mode: ${isMockupMode ? 'ON' : 'OFF'}`;
         toggleMockupBtn.style.color = isMockupMode ? measureColor.value : "var(--text-color)";
         
-        // Pointers get destroyed when canvas resizes, so reset measurement state safely
         p1 = p2 = null; isDrawingLine = false; 
         measurementReadout.innerText = "0.00 mm";
         interactCtx.clearRect(0,0, interactCanvas.width, interactCanvas.height);
-        
         renderWorkspace();
     });
 
@@ -294,7 +309,7 @@ document.addEventListener('DOMContentLoaded', () => {
         interactCtx.lineTo(end.x + Math.cos(pAngle)*tickL, end.y + Math.sin(pAngle)*tickL);
         interactCtx.stroke();
 
-        // Universal Physical Distance Calculation (Independent of Canvas size changes!)
+        // Universal Physical Distance Calculation (Independent of Canvas dimensions)
         const cssDist = Math.hypot(end.x - start.x, end.y - start.y) / DPR;
         const distanceMm = (cssDist / PX_PER_CM) * 10;
         measurementReadout.innerText = distanceMm.toFixed(2) + " mm";
@@ -329,11 +344,11 @@ document.addEventListener('DOMContentLoaded', () => {
         interactCtx.clearRect(0,0, interactCanvas.width, interactCanvas.height);
         actualSizeContainer.classList.remove('measuring');
         magnifier.classList.add('hidden');
-        toggleMeasureBtn.innerText = "Measurement: OFF";
+        toggleMeasureBtn.innerText = "Measure: OFF";
         toggleMeasureBtn.style.color = "var(--text-color)";
     });
 
-    // --- 5. WORKER ENGINE (Unchanged) ---
+    // --- 5. WORKER ENGINE LOGIC ---
     const printMediumDropdown = document.getElementById('print-medium');
     const customStrokeInputVal = document.getElementById('custom-stroke');
     
@@ -344,18 +359,19 @@ document.addEventListener('DOMContentLoaded', () => {
         loadingState.classList.remove('hidden');
         document.getElementById('progress-fill').style.width = '5%';
 
+        const freshPage = await pdfDocument.getPage(1);
         const wCm = parseFloat(widthInput.value);
-        const reqScale = ((wCm * CM_TO_INCHES) * TARGET_DPI) / pdfPage.getViewport({scale:1}).width;
+        const reqScale = ((wCm * CM_TO_INCHES) * TARGET_DPI) / freshPage.getViewport({scale:1}).width;
         
         const opt = printMediumDropdown.options[printMediumDropdown.selectedIndex];
         let minStrokeMm = opt.value === 'custom' ? parseFloat(customStrokeInputVal.value) : parseFloat(opt.getAttribute('data-min-stroke'));
         const minStrokePixels = minStrokeMm * (TARGET_DPI / 25.4);
 
         const highResCanvas = document.createElement('canvas');
-        const viewport = pdfPage.getViewport({ scale: reqScale });
+        const viewport = freshPage.getViewport({ scale: reqScale });
         highResCanvas.width = viewport.width; highResCanvas.height = viewport.height;
         
-        await pdfPage.render({ canvasContext: highResCanvas.getContext('2d'), viewport: viewport }).promise;
+        await freshPage.render({ canvasContext: highResCanvas.getContext('2d'), viewport: viewport }).promise;
         const imageData = highResCanvas.getContext('2d').getImageData(0, 0, viewport.width, viewport.height);
         analyzerWorker.postMessage({ imageData, minStrokePixels, targetWidth: viewport.width, targetHeight: viewport.height });
     });
