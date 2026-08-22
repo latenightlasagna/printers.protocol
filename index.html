@@ -28,7 +28,7 @@
             </div>
             
             <div id="preview-container" class="preview-container hidden">
-                <div id="ruler-left" class="ruler hidden"></div>
+                <canvas id="ruler-canvas" class="hidden"></canvas>
                 <div class="canvas-wrapper" id="canvas-wrapper">
                     <canvas id="pdf-preview"></canvas>
                     <canvas id="error-overlay" class="hidden"></canvas>
@@ -38,7 +38,6 @@
         </section>
 
         <section class="control-panel">
-            
             <div class="parameter-group">
                 <label for="print-medium">Print Medium</label>
                 <select id="print-medium">
@@ -96,8 +95,8 @@
                     <button id="toggle-measure" class="btn-secondary btn-small">Measurement Tool: OFF</button>
                     <button id="btn-actual-size" class="btn-primary btn-small">View Actual Size</button>
                 </div>
+                <p class="tool-hint hidden" id="measure-hint"><em>Hold SHIFT to draw straight lines.</em></p>
             </div>
-            
         </section>
     </main>
 
