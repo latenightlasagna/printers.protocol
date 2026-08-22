@@ -86,7 +86,7 @@
                     <span class="toggle-label">Highlight Error Areas</span>
                 </div>
 
-                <button id="btn-actual-size" class="btn-primary btn-small w-100">Open Actual Size & Measure</button>
+                <button id="btn-actual-size" class="btn-primary btn-small w-100">Open Actual Size Workspace</button>
             </div>
             
             <div class="brand-footer">by splinters.protocol</div>
@@ -95,23 +95,50 @@
 
     <!-- PRO ACTUAL SIZE WORKSPACE -->
     <div id="actual-size-modal" class="hidden">
-        <div class="modal-toolbar">
-            <div class="toolbar-left">
-                <button id="toggle-measure" class="btn-secondary btn-small">Measurement: OFF</button>
-                <button id="reset-measure" class="btn-secondary btn-small">Reset Line</button>
-                
-                <div class="tool-group">
-                    <input type="color" id="measure-color" value="#0044FF" title="Line Color">
-                    <input type="range" id="measure-thickness" min="0.5" max="10" step="0.5" value="2" title="Line Thickness">
+        
+        <div class="modal-toolbar-wrapper">
+            <!-- Top Toolbar -->
+            <div class="modal-toolbar">
+                <div class="toolbar-left">
+                    <button id="toggle-measure" class="btn-secondary btn-small">Measure: OFF</button>
+                    <button id="reset-measure" class="btn-secondary btn-small">Reset Line</button>
+                    
+                    <div class="tool-group">
+                        <input type="color" id="measure-color" value="#0044FF" title="Line Color">
+                        <input type="range" id="measure-thickness" min="0.5" max="10" step="0.5" value="2" title="Line Thickness">
+                    </div>
+                    
+                    <div class="readout-box">Length: <span id="measurement-readout">0.00 mm</span></div>
+                    <span class="tool-hint hidden" id="measure-hint"><em>Hold SHIFT to snap angles.</em></span>
                 </div>
                 
-                <div class="readout-box">
-                    Length: <span id="measurement-readout">0.00 mm</span>
+                <div class="toolbar-right">
+                    <button id="toggle-mockup" class="btn-secondary btn-small">Mockup Mode: OFF</button>
+                    <button id="close-modal" class="btn-primary btn-small">Close Workspace</button>
                 </div>
-                
-                <span class="tool-hint hidden" id="measure-hint"><em>Hold SHIFT to snap angles.</em></span>
             </div>
-            <button id="close-modal" class="btn-primary btn-small">Close Workspace</button>
+
+            <!-- Secondary Mockup Toolbar (Hidden by default) -->
+            <div id="mockup-toolbar" class="modal-toolbar secondary-toolbar hidden">
+                <div class="toolbar-left">
+                    <div class="tool-group">
+                        <span class="tool-label">Scale Artwork:</span>
+                        <input type="range" id="mockup-scale" min="10" max="200" step="1" value="100">
+                        <span id="scale-readout" class="readout-small">100%</span>
+                    </div>
+                    <div class="tool-group">
+                        <span class="tool-label">X Pos (cm):</span>
+                        <input type="number" id="mockup-x" step="0.5" class="tiny-input">
+                    </div>
+                    <div class="tool-group">
+                        <span class="tool-label">Y Pos (cm):</span>
+                        <input type="number" id="mockup-y" step="0.5" class="tiny-input">
+                    </div>
+                </div>
+                <div class="toolbar-right">
+                    <span class="tool-hint"><em>Mockup: Standard Size S (60x80cm bounding area)</em></span>
+                </div>
+            </div>
         </div>
         
         <div class="modal-scroll-area">
@@ -122,10 +149,7 @@
                 <div id="actual-size-container">
                     <canvas id="actual-size-canvas"></canvas>
                     <canvas id="interaction-layer"></canvas>
-                    
-                    <div id="magnifier" class="hidden">
-                        <canvas id="mag-canvas"></canvas>
-                    </div>
+                    <div id="magnifier" class="hidden"><canvas id="mag-canvas"></canvas></div>
                 </div>
             </div>
         </div>
