@@ -12,6 +12,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const progressFill = document.getElementById('progress-fill');
     const resultsPanel = document.getElementById('results-panel');
     const printMedium = document.getElementById('print-medium');
+    const strokeInfo = document.getElementById('stroke-info');
+    const customStrokeInput = document.getElementById('custom-stroke');
     
     // Tools UI
     const rulerCanvas = document.getElementById('ruler-canvas');
@@ -29,7 +31,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const overlayCanvas = document.getElementById('error-overlay');
     const interactCanvas = document.getElementById('interaction-layer');
     const interactCtx = interactCanvas.getContext('2d');
+    
+    // Modal Elements
     const actualSizeCanvas = document.getElementById('actual-size-canvas');
+    const modalRulerTop = document.getElementById('modal-ruler-top');
+    const modalRulerLeft = document.getElementById('modal-ruler-left');
     
     let pdfDocument = null; let pdfPage = null;
     const TARGET_DPI = 300; const CM_TO_INCHES = 0.393701;
@@ -39,6 +45,18 @@ document.addEventListener('DOMContentLoaded', () => {
     let isDrawingLine = false;
     let p1 = null; 
     let p2 = null;
+
+    // --- 0. DYNAMIC STROKE LABEL ---
+    function updateStrokeInfo() {
+        let val = printMedium.value;
+        let min = 0.4;
+        if (val === 'poster') min = 0.25;
+        if (val === 'custom') min = parseFloat(customStrokeInput.value) || 0.4;
+        strokeInfo.innerText = `(Min printable element: ${min} mm)`;
+    }
+    printMedium.addEventListener('change', updateStrokeInfo);
+    customStrokeInput.addEventListener('input', updateStrokeInfo);
+    updateStrokeInfo(); // Init
 
     // --- 1. UPLOAD ---
     uploadBtn.addEventListener('click', () => fileInput.click());
@@ -67,12 +85,12 @@ document.addEventListener('DOMContentLoaded', () => {
         canvas.height = overlayCanvas.height = interactCanvas.height = viewport.height;
 
         await pdfPage.render({ canvasContext: ctx, viewport: viewport }).promise;
-        drawRuler();
+        drawMainRuler();
         validateForm();
     }
 
-    // --- 2. RULER RENDERING ---
-    function drawRuler() {
+    // --- 2. MAIN PREVIEW RULER ---
+    function drawMainRuler() {
         const hCm = parseFloat(heightInput.value);
         if(!hCm || hCm <= 0) return;
         
@@ -88,21 +106,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
         for(let i = 0; i <= hCm; i++) {
             const y = i * pixelsPerCm;
-            // Draw main CM line
             rulerCtx.fillRect(20, y, 20, 1);
-            if(i > 0) rulerCtx.fillText(i, 16, y + 4); // Draw Number
-            
-            // Draw half CM line
+            if(i > 0) rulerCtx.fillText(i, 16, y + 4); 
             if (i < hCm) rulerCtx.fillRect(30, y + (pixelsPerCm/2), 10, 1);
         }
     }
-    window.addEventListener('resize', drawRuler);
-    widthInput.addEventListener('input', () => { validateForm(); drawRuler(); });
-    heightInput.addEventListener('input', () => { validateForm(); drawRuler(); });
+    window.addEventListener('resize', drawMainRuler);
+    widthInput.addEventListener('input', () => { validateForm(); drawMainRuler(); });
+    heightInput.addEventListener('input', () => { validateForm(); drawMainRuler(); });
     
     toggleRulerBtn.addEventListener('click', () => {
         rulerCanvas.classList.toggle('hidden');
-        drawRuler();
+        drawMainRuler();
     });
 
     // --- 3. ADOBE-STYLE MEASUREMENT TOOL ---
@@ -128,21 +143,18 @@ document.addEventListener('DOMContentLoaded', () => {
         const coords = getMousePos(e);
         
         if (!isDrawingLine) {
-            // First Click: Start drawing
             p1 = coords;
             isDrawingLine = true;
         } else {
-            // Second Click: Finish drawing
             p2 = applyShiftConstraint(coords, e.shiftKey);
             isDrawingLine = false;
-            renderMeasurementLine(p1, p2, true); // True = draw final anchor
+            renderMeasurementLine(p1, p2, true);
         }
     });
 
     interactCanvas.addEventListener('mousemove', (e) => {
         if(!isMeasuringMode || !isDrawingLine) return;
-        const currentPos = applyShiftConstraint(getMousePos(e), e.shiftKey);
-        renderMeasurementLine(p1, currentPos, false);
+        renderMeasurementLine(p1, applyShiftConstraint(getMousePos(e), e.shiftKey), false);
     });
 
     function getMousePos(e) {
@@ -155,70 +167,82 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function applyShiftConstraint(current, shiftPressed) {
         if (!shiftPressed || !p1) return current;
-        const dx = current.x - p1.x;
-        const dy = current.y - p1.y;
+        const dx = current.x - p1.x; const dy = current.y - p1.y;
         const angle = Math.atan2(dy, dx);
         const snappedAngle = Math.round(angle / (Math.PI / 4)) * (Math.PI / 4);
         const dist = Math.hypot(dx, dy);
-        return {
-            x: p1.x + Math.cos(snappedAngle) * dist,
-            y: p1.y + Math.sin(snappedAngle) * dist
-        };
+        return { x: p1.x + Math.cos(snappedAngle) * dist, y: p1.y + Math.sin(snappedAngle) * dist };
     }
 
     function renderMeasurementLine(start, end, isFinal) {
         interactCtx.clearRect(0,0, interactCanvas.width, interactCanvas.height);
         
-        // Draw Line
-        interactCtx.strokeStyle = "var(--blue)";
-        interactCtx.lineWidth = 2;
-        interactCtx.beginPath();
-        interactCtx.moveTo(start.x, start.y);
-        interactCtx.lineTo(end.x, end.y);
-        interactCtx.stroke();
+        interactCtx.strokeStyle = "var(--blue)"; interactCtx.lineWidth = 2;
+        interactCtx.beginPath(); interactCtx.moveTo(start.x, start.y); interactCtx.lineTo(end.x, end.y); interactCtx.stroke();
         
-        // Draw Anchors
         interactCtx.fillStyle = "var(--blue)";
         interactCtx.beginPath(); interactCtx.arc(start.x, start.y, 4, 0, Math.PI*2); interactCtx.fill();
-        if (isFinal) {
-            interactCtx.beginPath(); interactCtx.arc(end.x, end.y, 4, 0, Math.PI*2); interactCtx.fill();
-        }
+        if (isFinal) { interactCtx.beginPath(); interactCtx.arc(end.x, end.y, 4, 0, Math.PI*2); interactCtx.fill(); }
 
-        // Calculate physical distance
         const wCm = parseFloat(widthInput.value);
         const pixelsDistance = Math.hypot(end.x - start.x, end.y - start.y);
-        const mmPerPixel = (wCm * 10) / interactCanvas.width;
-        const distanceMm = pixelsDistance * mmPerPixel;
+        const distanceMm = pixelsDistance * ((wCm * 10) / interactCanvas.width);
 
-        // Adobe Style Tooltip (Dark Box, White Text)
         const text = distanceMm.toFixed(2) + " mm";
         interactCtx.font = "600 14px 'IBM Plex Sans'";
-        const textWidth = interactCtx.measureText(text).width;
-        
-        // Offset tooltip from cursor
-        const tooltipX = end.x + 15;
-        const tooltipY = end.y + 15;
+        const tooltipX = end.x + 15; const tooltipY = end.y + 15;
 
         interactCtx.fillStyle = "rgba(0, 0, 0, 0.85)";
-        interactCtx.fillRect(tooltipX, tooltipY, textWidth + 16, 26);
+        interactCtx.fillRect(tooltipX, tooltipY, interactCtx.measureText(text).width + 16, 26);
         
         interactCtx.fillStyle = "#FFFFFF";
         interactCtx.fillText(text, tooltipX + 8, tooltipY + 18);
     }
 
-    // --- 4. ACTUAL SIZE MODAL ---
+    // --- 4. ACTUAL SIZE MODAL WITH DUAL RULERS ---
     btnActualSize.addEventListener('click', () => {
         const wCm = parseFloat(widthInput.value);
-        if(!wCm) return;
-        // Map 1cm to physical screen pixels (Assuming 96dpi display average = ~37.8px per cm)
-        const cssWidth = wCm * 37.795; 
+        const hCm = parseFloat(heightInput.value);
+        if(!wCm || !hCm) return;
         
+        // Exact mapping of real-life cm to digital screen pixels (1in = 96px => 1cm = 37.795px)
+        const PX_PER_CM = 37.795275; 
+        const cssWidth = wCm * PX_PER_CM;
+        const cssHeight = hCm * PX_PER_CM;
+        
+        // Artwork Canvas Setup
         actualSizeCanvas.width = canvas.width;
         actualSizeCanvas.height = canvas.height;
         actualSizeCanvas.getContext('2d').drawImage(canvas, 0, 0);
-        
         actualSizeCanvas.style.width = `${cssWidth}px`;
-        actualSizeCanvas.style.height = 'auto'; 
+        actualSizeCanvas.style.height = `${cssHeight}px`; 
+        
+        // Setup Top Ruler
+        modalRulerTop.width = cssWidth; modalRulerTop.height = 30;
+        modalRulerTop.style.width = `${cssWidth}px`; modalRulerTop.style.height = `30px`;
+        const ctxTop = modalRulerTop.getContext('2d');
+        ctxTop.fillStyle = "var(--text-color)"; ctxTop.font = "10px 'IBM Plex Sans'";
+        
+        // Setup Left Ruler
+        modalRulerLeft.width = 30; modalRulerLeft.height = cssHeight;
+        modalRulerLeft.style.width = `30px`; modalRulerLeft.style.height = `${cssHeight}px`;
+        const ctxLeft = modalRulerLeft.getContext('2d');
+        ctxLeft.fillStyle = "var(--text-color)"; ctxLeft.font = "10px 'IBM Plex Sans'";
+
+        // Draw Real-Life physical CM ticks
+        for(let i=0; i<=wCm; i++) {
+            const x = i * PX_PER_CM;
+            ctxTop.fillRect(x, 15, 1, 15);
+            if(i < wCm) ctxTop.fillRect(x + PX_PER_CM/2, 22, 1, 8); 
+            if(i>0) ctxTop.fillText(i, x + 3, 12);
+        }
+        for(let i=0; i<=hCm; i++) {
+            const y = i * PX_PER_CM;
+            ctxLeft.fillRect(15, y, 15, 1);
+            if(i < hCm) ctxLeft.fillRect(22, y + PX_PER_CM/2, 8, 1);
+            if(i>0) ctxLeft.fillText(i, 3, y + 12);
+        }
+
         actualSizeModal.classList.remove('hidden');
     });
 
@@ -239,11 +263,10 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('loading-text').innerText = "Morphological Opening Pipeline...";
 
         const wCm = parseFloat(widthInput.value);
-        const hCm = parseFloat(heightInput.value);
         const reqScale = ((wCm * CM_TO_INCHES) * TARGET_DPI) / pdfPage.getViewport({scale:1}).width;
         
         let minStrokeMm = printMedium.value === 'poster' ? 0.25 : 0.4;
-        if (printMedium.value === 'custom') minStrokeMm = parseFloat(document.getElementById('custom-stroke').value);
+        if (printMedium.value === 'custom') minStrokeMm = parseFloat(customStrokeInput.value);
         const minStrokePixels = minStrokeMm * (TARGET_DPI / 25.4);
 
         const highResCanvas = document.createElement('canvas');
