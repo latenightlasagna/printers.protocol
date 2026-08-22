@@ -91,14 +91,28 @@ document.addEventListener('DOMContentLoaded', () => {
         measurementReadout.style.color = color;
         
         if (isMeasuringMode) {
-            toggleMeasureBtn.style.color = color;
-            resetMeasureBtn.style.color = compColor;
+            toggleMeasureBtn.style.backgroundColor = color;
+            toggleMeasureBtn.style.color = "var(--bg-color)";
+            toggleMeasureBtn.style.borderColor = color;
+            
+            resetMeasureBtn.style.backgroundColor = compColor;
+            resetMeasureBtn.style.color = "var(--bg-color)";
+            resetMeasureBtn.style.borderColor = compColor;
         } else {
-            toggleMeasureBtn.style.color = "var(--text-color)";
+            toggleMeasureBtn.style.backgroundColor = "";
+            toggleMeasureBtn.style.color = "";
+            toggleMeasureBtn.style.borderColor = "";
         }
         
-        if (isMockupMode) toggleMockupBtn.style.color = color;
-        else toggleMockupBtn.style.color = "var(--text-color)";
+        if (isMockupMode) {
+            toggleMockupBtn.style.backgroundColor = color;
+            toggleMockupBtn.style.color = "var(--bg-color)";
+            toggleMockupBtn.style.borderColor = color;
+        } else {
+            toggleMockupBtn.style.backgroundColor = "";
+            toggleMockupBtn.style.color = "";
+            toggleMockupBtn.style.borderColor = "";
+        }
     }
 
     // Reset Defaults on Double Click
@@ -143,7 +157,6 @@ document.addEventListener('DOMContentLoaded', () => {
         canvas.width = overlayCanvas.width = viewport.width; canvas.height = overlayCanvas.height = viewport.height;
         await pdfPage.render({ canvasContext: ctx, viewport: viewport }).promise;
         
-        // Setup default mockup positioning centered exactly on X and Y
         mockupX.value = Math.max(0, (MOCKUP_W - artWidthCm) / 2).toFixed(1);
         mockupY.value = Math.max(0, (MOCKUP_H - artHeightCm) / 2).toFixed(1);
         validateForm();
@@ -210,7 +223,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const destW = cachedArtworkCanvas.width * scaleFactor;
             const destH = cachedArtworkCanvas.height * scaleFactor;
             
-            // X and Y pivot strictly from the center of the artwork map
             const inputX = parseFloat(mockupX.value) * PX_PER_CM * DPR;
             const inputY = parseFloat(mockupY.value) * PX_PER_CM * DPR;
             const destX = inputX - (destW / 2);
