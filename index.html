@@ -7,11 +7,8 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
-    <!-- PDF.js core library -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-    <script>
-        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-    </script>
+    <script>pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';</script>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -22,7 +19,7 @@
     </header>
 
     <main class="app-container">
-        <!-- LEFT: Visual/Preview Area -->
+        
         <section class="visual-panel">
             <div id="dropzone" class="dropzone active">
                 <p>Drag & Drop PDF here</p>
@@ -31,14 +28,15 @@
             </div>
             
             <div id="preview-container" class="preview-container hidden">
-                <div class="canvas-wrapper">
+                <div id="ruler-left" class="ruler hidden"></div>
+                <div class="canvas-wrapper" id="canvas-wrapper">
                     <canvas id="pdf-preview"></canvas>
                     <canvas id="error-overlay" class="hidden"></canvas>
+                    <canvas id="interaction-layer"></canvas>
                 </div>
             </div>
         </section>
 
-        <!-- RIGHT: Control Panel -->
         <section class="control-panel">
             
             <div class="parameter-group">
@@ -68,14 +66,12 @@
                 </div>
             </div>
 
-            <button id="analyze-btn" class="btn-primary" disabled>Check My Printfile</button>
+            <button id="analyze-btn" class="btn-primary" disabled>Analyze Printfile</button>
 
             <!-- Loading State -->
             <div id="loading-state" class="loading-state hidden">
                 <p id="loading-text">Analyzing pixels...</p>
-                <div class="progress-bar">
-                    <div id="progress-fill" class="progress-fill"></div>
-                </div>
+                <div class="progress-bar"><div id="progress-fill" class="progress-fill"></div></div>
             </div>
 
             <!-- Results State -->
@@ -94,10 +90,24 @@
                     </label>
                     <span class="toggle-label">Highlight Error Areas</span>
                 </div>
+
+                <div class="tool-toggles">
+                    <button id="toggle-ruler" class="btn-secondary btn-small">Toggle CM Ruler</button>
+                    <button id="toggle-measure" class="btn-secondary btn-small">Measurement Tool: OFF</button>
+                    <button id="btn-actual-size" class="btn-primary btn-small">View Actual Size</button>
+                </div>
             </div>
             
         </section>
     </main>
+
+    <!-- Actual Size Modal -->
+    <div id="actual-size-modal" class="hidden">
+        <button id="close-modal" class="btn-primary">CLOSE ACTUAL SIZE</button>
+        <div id="actual-size-container">
+            <canvas id="actual-size-canvas"></canvas>
+        </div>
+    </div>
 
     <script src="app.js"></script>
 </body>
