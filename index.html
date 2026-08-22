@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Printfile Checker | Black Meadow</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+    <!-- PDF.js core library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script>
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    </script>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <header>
+        <h1>Printfile Checker.</h1>
+        <p>Screenprinting Pre-Flight Analysis</p>
+    </header>
+
+    <main class="app-container">
+        <!-- LEFT: Visual/Preview Area -->
+        <section class="visual-panel">
+            <div id="dropzone" class="dropzone active">
+                <p>Drag & Drop PDF here</p>
+                <button id="upload-btn" class="btn-secondary">Select File</button>
+                <input type="file" id="file-input" accept="application/pdf" hidden>
+            </div>
+            
+            <div id="preview-container" class="preview-container hidden">
+                <div class="canvas-wrapper">
+                    <canvas id="pdf-preview"></canvas>
+                    <canvas id="error-overlay" class="hidden"></canvas>
+                </div>
+            </div>
+        </section>
+
+        <!-- RIGHT: Control Panel -->
+        <section class="control-panel">
+            
+            <div class="parameter-group">
+                <label for="print-medium">Print Medium</label>
+                <select id="print-medium">
+                    <option value="textile-standard" data-min-stroke="0.4">Textile Standard (Max: 30x42cm)</option>
+                    <option value="textile-oversize" data-min-stroke="0.4">Textile Oversize (Max: 35x45cm)</option>
+                    <option value="tote-bag" data-min-stroke="0.4">Tote Bag (Max: 27x30cm)</option>
+                    <option value="poster" data-min-stroke="0.25">Poster / Graphic (Max: 70x100cm)</option>
+                    <option value="custom">Custom...</option>
+                </select>
+            </div>
+
+            <div class="parameter-group custom-stroke hidden" id="custom-stroke-group">
+                <label for="custom-stroke">Custom Min Stroke (mm)</label>
+                <input type="number" id="custom-stroke" step="0.05" value="0.4">
+            </div>
+
+            <div class="parameter-group dual-input">
+                <div class="input-half">
+                    <label for="print-width">Actual Width (cm)</label>
+                    <input type="number" id="print-width" placeholder="W" step="0.1">
+                </div>
+                <div class="input-half">
+                    <label for="print-height">Actual Height (cm)</label>
+                    <input type="number" id="print-height" placeholder="H" step="0.1">
+                </div>
+            </div>
+
+            <button id="analyze-btn" class="btn-primary" disabled>Check My Printfile</button>
+
+            <!-- Loading State -->
+            <div id="loading-state" class="loading-state hidden">
+                <p id="loading-text">Analyzing pixels...</p>
+                <div class="progress-bar">
+                    <div id="progress-fill" class="progress-fill"></div>
+                </div>
+            </div>
+
+            <!-- Results State -->
+            <div id="results-panel" class="results-panel hidden">
+                <h2 id="result-status">Check Done!</h2>
+                <ul class="result-details">
+                    <li>Size Check: <span id="res-size">Pass</span></li>
+                    <li>Grayscale Check: <span id="res-gray">Pass</span></li>
+                    <li>Stroke Check: <span id="res-stroke" class="fail-text">Failed</span></li>
+                </ul>
+                
+                <div class="zebra-toggle">
+                    <label class="switch">
+                        <input type="checkbox" id="zebra-meter">
+                        <span class="slider"></span>
+                    </label>
+                    <span class="toggle-label">Highlight Error Areas</span>
+                </div>
+            </div>
+            
+        </section>
+    </main>
+
+    <script src="app.js"></script>
+</body>
+</html>
