@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Printfile Checker | Black Meadow</title>
+    <title>printers.protocol</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
@@ -14,7 +14,7 @@
 <body>
 
     <header>
-        <h1>Printfile Checker.</h1>
+        <h1>printers.protocol</h1>
         <p>Screenprinting Pre-Flight Analysis</p>
     </header>
 
@@ -39,7 +39,10 @@
 
         <section class="control-panel">
             <div class="parameter-group">
-                <label for="print-medium">Print Medium</label>
+                <label for="print-medium">
+                    Print Medium 
+                    <span id="stroke-info" class="stroke-info"></span>
+                </label>
                 <select id="print-medium">
                     <option value="textile-standard" data-min-stroke="0.4">Textile Standard (Max: 30x42cm)</option>
                     <option value="textile-oversize" data-min-stroke="0.4">Textile Oversize (Max: 35x45cm)</option>
@@ -103,10 +106,17 @@
     <!-- Actual Size Modal -->
     <div id="actual-size-modal" class="hidden">
         <button id="close-modal" class="btn-primary">CLOSE ACTUAL SIZE</button>
-        <div id="actual-size-container">
-            <canvas id="actual-size-canvas"></canvas>
+        <div id="actual-size-wrapper">
+            <div class="modal-corner"></div>
+            <canvas id="modal-ruler-top"></canvas>
+            <canvas id="modal-ruler-left"></canvas>
+            <div id="actual-size-container">
+                <canvas id="actual-size-canvas"></canvas>
+            </div>
         </div>
     </div>
+
+    <div class="brand-footer">by splinters.protocol</div>
 
     <script src="app.js"></script>
 </body>
