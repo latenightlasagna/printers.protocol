@@ -29,11 +29,17 @@ document.addEventListener('DOMContentLoaded', () => {
     const modalRulerTop = document.getElementById('modal-ruler-top');
     const modalRulerLeft = document.getElementById('modal-ruler-left');
     
+    // Magnifier Elements
+    const magnifier = document.getElementById('magnifier');
+    const magCanvas = document.getElementById('mag-canvas');
+    const magCtx = magCanvas.getContext('2d');
+    
     let pdfDocument = null, pdfPage = null;
     const TARGET_DPI = 300, CM_TO_INCHES = 0.393701, PX_PER_CM = 37.795275;
     
     let isMeasuringMode = false, isDrawingLine = false;
     let p1 = null, p2 = null;
+    let lastMouseCssX = 0, lastMouseCssY = 0;
 
     function updateStrokeInfo() {
         const opt = printMedium.options[printMedium.selectedIndex];
@@ -86,27 +92,24 @@ document.addEventListener('DOMContentLoaded', () => {
         actualSizeContainer.style.width = `${cssWidth}px`;
         actualSizeContainer.style.height = `${cssHeight}px`; 
         
-        // Infinite Ruler Rendering
-        const maxRulerW = Math.max(cssWidth, window.innerWidth);
-        const maxRulerH = Math.max(cssHeight, window.innerHeight);
-
-        modalRulerTop.width = maxRulerW; modalRulerTop.height = 30;
-        modalRulerTop.style.width = `${maxRulerW}px`; modalRulerTop.style.height = `30px`;
+        // Exact 1:1 Physical Rulers
+        modalRulerTop.width = cssWidth; modalRulerTop.height = 30;
+        modalRulerTop.style.width = `${cssWidth}px`; modalRulerTop.style.height = `30px`;
         const ctxTop = modalRulerTop.getContext('2d');
         ctxTop.fillStyle = "var(--text-color)"; ctxTop.font = "10px 'IBM Plex Sans'";
         
-        modalRulerLeft.width = 30; modalRulerLeft.height = maxRulerH;
-        modalRulerLeft.style.width = `30px`; modalRulerLeft.style.height = `${maxRulerH}px`;
+        modalRulerLeft.width = 30; modalRulerLeft.height = cssHeight;
+        modalRulerLeft.style.width = `30px`; modalRulerLeft.style.height = `${cssHeight}px`;
         const ctxLeft = modalRulerLeft.getContext('2d');
         ctxLeft.fillStyle = "var(--text-color)"; ctxLeft.font = "10px 'IBM Plex Sans'";
 
-        for(let i=0; i <= maxRulerW/PX_PER_CM; i++) {
+        for(let i=0; i <= Math.ceil(wCm); i++) {
             const x = i * PX_PER_CM;
             ctxTop.fillRect(x, 15, 1, 15);
             ctxTop.fillRect(x + PX_PER_CM/2, 22, 1, 8); 
             if(i>0) ctxTop.fillText(i, x + 3, 12);
         }
-        for(let i=0; i <= maxRulerH/PX_PER_CM; i++) {
+        for(let i=0; i <= Math.ceil(hCm); i++) {
             const y = i * PX_PER_CM;
             ctxLeft.fillRect(15, y, 15, 1);
             ctxLeft.fillRect(22, y + PX_PER_CM/2, 8, 1);
@@ -120,26 +123,43 @@ document.addEventListener('DOMContentLoaded', () => {
         isMeasuringMode = isDrawingLine = false;
         interactCtx.clearRect(0,0, interactCanvas.width, interactCanvas.height);
         actualSizeContainer.classList.remove('measuring');
+        magnifier.classList.add('hidden');
     });
 
+    // --- INTERACTIVE TOOL LOGIC ---
     toggleMeasureBtn.addEventListener('click', () => {
         isMeasuringMode = !isMeasuringMode;
         actualSizeContainer.classList.toggle('measuring', isMeasuringMode);
         document.getElementById('measure-hint').classList.toggle('hidden', !isMeasuringMode);
         toggleMeasureBtn.innerText = `Measurement: ${isMeasuringMode ? 'ON' : 'OFF'}`;
+        if(!isMeasuringMode) magnifier.classList.add('hidden');
         isDrawingLine = false;
     });
+
+    measureColor.addEventListener('input', () => {
+        if(p1 && p2 && !isDrawingLine) renderLine(p1, p2);
+        if(isMeasuringMode) updateMagnifier(lastMouseCssX, lastMouseCssY);
+    });
+
+    interactCanvas.addEventListener('mouseenter', () => { if(isMeasuringMode) magnifier.classList.remove('hidden'); });
+    interactCanvas.addEventListener('mouseleave', () => { magnifier.classList.add('hidden'); });
 
     interactCanvas.addEventListener('mousedown', (e) => {
         if(!isMeasuringMode) return;
         const coords = getMousePos(e);
         if (!isDrawingLine) { p1 = coords; isDrawingLine = true; } 
         else { p2 = applyShiftConstraint(coords, e.shiftKey); isDrawingLine = false; renderLine(p1, p2); }
+        updateMagnifier(lastMouseCssX, lastMouseCssY);
     });
 
     interactCanvas.addEventListener('mousemove', (e) => {
-        if(!isMeasuringMode || !isDrawingLine) return;
-        renderLine(p1, applyShiftConstraint(getMousePos(e), e.shiftKey));
+        if(!isMeasuringMode) return;
+        const rect = interactCanvas.getBoundingClientRect();
+        lastMouseCssX = e.clientX - rect.left;
+        lastMouseCssY = e.clientY - rect.top;
+        
+        if(isDrawingLine) renderLine(p1, applyShiftConstraint(getMousePos(e), e.shiftKey));
+        updateMagnifier(lastMouseCssX, lastMouseCssY);
     });
 
     function getMousePos(e) {
@@ -168,7 +188,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Draw CAD-style perpendicular ticks
         const angle = Math.atan2(end.y - start.y, end.x - start.x);
         const pAngle = angle + Math.PI/2;
-        const tickL = 10;
+        const tickL = 6;
         
         interactCtx.beginPath();
         interactCtx.moveTo(start.x - Math.cos(pAngle)*tickL, start.y - Math.sin(pAngle)*tickL);
@@ -187,6 +207,34 @@ document.addEventListener('DOMContentLoaded', () => {
         interactCtx.fillRect(tx, ty, interactCtx.measureText(text).width + 16, 26);
         interactCtx.fillStyle = "#FFFFFF";
         interactCtx.fillText(text, tx + 8, ty + 18);
+    }
+
+    function updateMagnifier(cssX, cssY) {
+        magnifier.style.left = `${cssX}px`;
+        magnifier.style.top = `${cssY}px`;
+        
+        const rect = interactCanvas.getBoundingClientRect();
+        const scaleX = actualSizeCanvas.width / rect.width, scaleY = actualSizeCanvas.height / rect.height;
+        
+        const intX = cssX * scaleX, intY = cssY * scaleY;
+        const magSize = 120, zoom = 3.0; // 3x zoom inside magnifier
+        const srcW = (magSize / zoom) * scaleX, srcH = (magSize / zoom) * scaleY;
+        const srcX = intX - srcW / 2, srcY = intY - srcH / 2;
+        
+        magCtx.clearRect(0, 0, magSize, magSize);
+        magCtx.fillStyle = "#ffffff";
+        magCtx.fillRect(0, 0, magSize, magSize);
+        
+        magCtx.drawImage(actualSizeCanvas, srcX, srcY, srcW, srcH, 0, 0, magSize, magSize);
+        magCtx.drawImage(interactCanvas, srcX, srcY, srcW, srcH, 0, 0, magSize, magSize);
+        
+        // Draw crisp thin crosshair
+        magCtx.strokeStyle = measureColor.value;
+        magCtx.lineWidth = 1;
+        magCtx.beginPath();
+        magCtx.moveTo(magSize/2, 0); magCtx.lineTo(magSize/2, magSize);
+        magCtx.moveTo(0, magSize/2); magCtx.lineTo(magSize, magSize/2);
+        magCtx.stroke();
     }
 
     // Engine connection remains the same
