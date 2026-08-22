@@ -14,6 +14,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const customStrokeGroup = document.getElementById('custom-stroke-group');
     
     const toggleMeasureBtn = document.getElementById('toggle-measure');
+    const resetMeasureBtn = document.getElementById('reset-measure');
     const measureColor = document.getElementById('measure-color');
     const btnActualSize = document.getElementById('btn-actual-size');
     const actualSizeModal = document.getElementById('actual-size-modal');
@@ -29,17 +30,20 @@ document.addEventListener('DOMContentLoaded', () => {
     const modalRulerTop = document.getElementById('modal-ruler-top');
     const modalRulerLeft = document.getElementById('modal-ruler-left');
     
-    // Magnifier Elements
     const magnifier = document.getElementById('magnifier');
     const magCanvas = document.getElementById('mag-canvas');
     const magCtx = magCanvas.getContext('2d');
     
     let pdfDocument = null, pdfPage = null;
-    const TARGET_DPI = 300, CM_TO_INCHES = 0.393701, PX_PER_CM = 37.795275;
+    
+    // Physics constants
+    const TARGET_DPI = 300; 
+    const CM_TO_INCHES = 0.393701;
+    const PX_PER_CM = 37.795275; // Standard CSS physical ratio
+    const DPR = window.devicePixelRatio || 1; // Captures true retina density
     
     let isMeasuringMode = false, isDrawingLine = false;
     let p1 = null, p2 = null;
-    let lastMouseCssX = 0, lastMouseCssY = 0;
 
     function updateStrokeInfo() {
         const opt = printMedium.options[printMedium.selectedIndex];
@@ -79,41 +83,51 @@ document.addEventListener('DOMContentLoaded', () => {
         analyzeBtn.disabled = !(pdfDocument && parseFloat(widthInput.value) > 0 && parseFloat(heightInput.value) > 0);
     }
 
-    btnActualSize.addEventListener('click', () => {
+    // --- PRO ACTUAL SIZE WORKSPACE ---
+    btnActualSize.addEventListener('click', async () => {
         const wCm = parseFloat(widthInput.value), hCm = parseFloat(heightInput.value);
         if(!wCm || !hCm) return;
         
-        const cssWidth = wCm * PX_PER_CM, cssHeight = hCm * PX_PER_CM;
+        const cssWidth = wCm * PX_PER_CM;
+        const cssHeight = hCm * PX_PER_CM;
         
-        actualSizeCanvas.width = interactCanvas.width = canvas.width;
-        actualSizeCanvas.height = interactCanvas.height = canvas.height;
-        actualSizeCanvas.getContext('2d').drawImage(canvas, 0, 0);
+        // Render 1:1 physically accurate canvas mapped directly to DPR for retina crispness
+        actualSizeCanvas.width = interactCanvas.width = cssWidth * DPR;
+        actualSizeCanvas.height = interactCanvas.height = cssHeight * DPR;
         
-        actualSizeContainer.style.width = `${cssWidth}px`;
-        actualSizeContainer.style.height = `${cssHeight}px`; 
+        actualSizeCanvas.style.width = interactCanvas.style.width = actualSizeContainer.style.width = `${cssWidth}px`;
+        actualSizeCanvas.style.height = interactCanvas.style.height = actualSizeContainer.style.height = `${cssHeight}px`; 
         
-        // Exact 1:1 Physical Rulers
-        modalRulerTop.width = cssWidth; modalRulerTop.height = 30;
+        // Render crisp PDF dynamically to exact physical size
+        const reqScale = (cssWidth * DPR) / pdfPage.getViewport({scale: 1}).width;
+        const viewport = pdfPage.getViewport({scale: reqScale});
+        await pdfPage.render({ canvasContext: actualSizeCanvas.getContext('2d'), viewport: viewport }).promise;
+        
+        // Build Exact Rulers 
+        modalRulerTop.width = cssWidth * DPR; modalRulerTop.height = 30 * DPR;
         modalRulerTop.style.width = `${cssWidth}px`; modalRulerTop.style.height = `30px`;
         const ctxTop = modalRulerTop.getContext('2d');
+        ctxTop.scale(DPR, DPR); // Draw using logical CSS pixels
         ctxTop.fillStyle = "var(--text-color)"; ctxTop.font = "10px 'IBM Plex Sans'";
         
-        modalRulerLeft.width = 30; modalRulerLeft.height = cssHeight;
+        modalRulerLeft.width = 30 * DPR; modalRulerLeft.height = cssHeight * DPR;
         modalRulerLeft.style.width = `30px`; modalRulerLeft.style.height = `${cssHeight}px`;
         const ctxLeft = modalRulerLeft.getContext('2d');
+        ctxLeft.scale(DPR, DPR);
         ctxLeft.fillStyle = "var(--text-color)"; ctxLeft.font = "10px 'IBM Plex Sans'";
 
-        for(let i=0; i <= Math.ceil(wCm); i++) {
+        // Loops strict to artwork dimensions
+        for(let i = 0; i <= wCm; i++) {
             const x = i * PX_PER_CM;
             ctxTop.fillRect(x, 15, 1, 15);
-            ctxTop.fillRect(x + PX_PER_CM/2, 22, 1, 8); 
-            if(i>0) ctxTop.fillText(i, x + 3, 12);
+            if(i < wCm) ctxTop.fillRect(x + PX_PER_CM/2, 22, 1, 8); 
+            if(i > 0) ctxTop.fillText(i, x + 3, 12);
         }
-        for(let i=0; i <= Math.ceil(hCm); i++) {
+        for(let i = 0; i <= hCm; i++) {
             const y = i * PX_PER_CM;
             ctxLeft.fillRect(15, y, 15, 1);
-            ctxLeft.fillRect(22, y + PX_PER_CM/2, 8, 1);
-            if(i>0) ctxLeft.fillText(i, 3, y + 12);
+            if(i < hCm) ctxLeft.fillRect(22, y + PX_PER_CM/2, 8, 1);
+            if(i > 0) ctxLeft.fillText(i, 3, y + 12);
         }
         actualSizeModal.classList.remove('hidden');
     });
@@ -126,19 +140,26 @@ document.addEventListener('DOMContentLoaded', () => {
         magnifier.classList.add('hidden');
     });
 
-    // --- INTERACTIVE TOOL LOGIC ---
+    // --- INTERACTIVE TOOL ---
     toggleMeasureBtn.addEventListener('click', () => {
         isMeasuringMode = !isMeasuringMode;
         actualSizeContainer.classList.toggle('measuring', isMeasuringMode);
         document.getElementById('measure-hint').classList.toggle('hidden', !isMeasuringMode);
         toggleMeasureBtn.innerText = `Measurement: ${isMeasuringMode ? 'ON' : 'OFF'}`;
+        toggleMeasureBtn.style.color = isMeasuringMode ? measureColor.value : "var(--text-color)";
         if(!isMeasuringMode) magnifier.classList.add('hidden');
         isDrawingLine = false;
     });
 
-    measureColor.addEventListener('input', () => {
+    resetMeasureBtn.addEventListener('click', () => {
+        p1 = null; p2 = null; isDrawingLine = false;
+        interactCtx.clearRect(0,0, interactCanvas.width, interactCanvas.height);
+    });
+
+    // Dynamic color override mapping
+    measureColor.addEventListener('input', (e) => {
+        if(isMeasuringMode) toggleMeasureBtn.style.color = e.target.value;
         if(p1 && p2 && !isDrawingLine) renderLine(p1, p2);
-        if(isMeasuringMode) updateMagnifier(lastMouseCssX, lastMouseCssY);
     });
 
     interactCanvas.addEventListener('mouseenter', () => { if(isMeasuringMode) magnifier.classList.remove('hidden'); });
@@ -149,22 +170,18 @@ document.addEventListener('DOMContentLoaded', () => {
         const coords = getMousePos(e);
         if (!isDrawingLine) { p1 = coords; isDrawingLine = true; } 
         else { p2 = applyShiftConstraint(coords, e.shiftKey); isDrawingLine = false; renderLine(p1, p2); }
-        updateMagnifier(lastMouseCssX, lastMouseCssY);
+        updateMagnifier(e.offsetX, e.offsetY);
     });
 
     interactCanvas.addEventListener('mousemove', (e) => {
         if(!isMeasuringMode) return;
-        const rect = interactCanvas.getBoundingClientRect();
-        lastMouseCssX = e.clientX - rect.left;
-        lastMouseCssY = e.clientY - rect.top;
-        
         if(isDrawingLine) renderLine(p1, applyShiftConstraint(getMousePos(e), e.shiftKey));
-        updateMagnifier(lastMouseCssX, lastMouseCssY);
+        updateMagnifier(e.offsetX, e.offsetY);
     });
 
+    // Because canvas width is DPR locked to CSS width, offsetX/Y is physically flawless
     function getMousePos(e) {
-        const rect = interactCanvas.getBoundingClientRect();
-        return { x: (e.clientX - rect.left) * (interactCanvas.width / rect.width), y: (e.clientY - rect.top) * (interactCanvas.height / rect.height) };
+        return { x: e.offsetX * DPR, y: e.offsetY * DPR };
     }
 
     function applyShiftConstraint(current, shiftPressed) {
@@ -177,18 +194,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function renderLine(start, end) {
         interactCtx.clearRect(0,0, interactCanvas.width, interactCanvas.height);
-        const color = measureColor.value;
+        const color = measureColor.value; // Fetch exact state value
         
         interactCtx.strokeStyle = interactCtx.fillStyle = color;
-        interactCtx.lineWidth = 2;
+        interactCtx.lineWidth = 2 * DPR;
         
-        // Draw Main Line
         interactCtx.beginPath(); interactCtx.moveTo(start.x, start.y); interactCtx.lineTo(end.x, end.y); interactCtx.stroke();
         
-        // Draw CAD-style perpendicular ticks
         const angle = Math.atan2(end.y - start.y, end.x - start.x);
         const pAngle = angle + Math.PI/2;
-        const tickL = 6;
+        const tickL = 6 * DPR;
         
         interactCtx.beginPath();
         interactCtx.moveTo(start.x - Math.cos(pAngle)*tickL, start.y - Math.sin(pAngle)*tickL);
@@ -201,43 +216,49 @@ document.addEventListener('DOMContentLoaded', () => {
         const distanceMm = Math.hypot(end.x - start.x, end.y - start.y) * ((wCm * 10) / interactCanvas.width);
 
         const text = distanceMm.toFixed(2) + " mm";
-        interactCtx.font = "600 16px 'IBM Plex Sans'";
-        const tx = end.x + 15, ty = end.y + 15;
+        interactCtx.font = `${600 * DPR} 16px 'IBM Plex Sans'`;
+        
+        // Tooltip logic
+        const tx = end.x + (15 * DPR), ty = end.y + (15 * DPR);
+        const pad = 8 * DPR, h = 26 * DPR;
+        const txtW = interactCtx.measureText(text).width;
+        
         interactCtx.fillStyle = "rgba(0, 0, 0, 0.85)";
-        interactCtx.fillRect(tx, ty, interactCtx.measureText(text).width + 16, 26);
+        interactCtx.fillRect(tx, ty, txtW + (pad*2), h);
         interactCtx.fillStyle = "#FFFFFF";
-        interactCtx.fillText(text, tx + 8, ty + 18);
+        interactCtx.fillText(text, tx + pad, ty + (18 * DPR));
     }
 
     function updateMagnifier(cssX, cssY) {
         magnifier.style.left = `${cssX}px`;
         magnifier.style.top = `${cssY}px`;
         
-        const rect = interactCanvas.getBoundingClientRect();
-        const scaleX = actualSizeCanvas.width / rect.width, scaleY = actualSizeCanvas.height / rect.height;
+        const magSize = 120, zoom = 4.0; 
+        magCanvas.width = magSize * DPR; magCanvas.height = magSize * DPR;
+        magCanvas.style.width = `${magSize}px`; magCanvas.style.height = `${magSize}px`;
         
-        const intX = cssX * scaleX, intY = cssY * scaleY;
-        const magSize = 120, zoom = 3.0; // 3x zoom inside magnifier
-        const srcW = (magSize / zoom) * scaleX, srcH = (magSize / zoom) * scaleY;
-        const srcX = intX - srcW / 2, srcY = intY - srcH / 2;
+        // Source capture relies strictly on DPR internal mapping
+        const srcW = (magSize / zoom) * DPR, srcH = (magSize / zoom) * DPR;
+        const srcX = (cssX * DPR) - (srcW / 2), srcY = (cssY * DPR) - (srcH / 2);
         
-        magCtx.clearRect(0, 0, magSize, magSize);
+        magCtx.clearRect(0, 0, magCanvas.width, magCanvas.height);
         magCtx.fillStyle = "#ffffff";
-        magCtx.fillRect(0, 0, magSize, magSize);
+        magCtx.fillRect(0, 0, magCanvas.width, magCanvas.height);
         
-        magCtx.drawImage(actualSizeCanvas, srcX, srcY, srcW, srcH, 0, 0, magSize, magSize);
-        magCtx.drawImage(interactCanvas, srcX, srcY, srcW, srcH, 0, 0, magSize, magSize);
+        // Render artwork and interaction layer into the zoom lens
+        magCtx.drawImage(actualSizeCanvas, srcX, srcY, srcW, srcH, 0, 0, magCanvas.width, magCanvas.height);
+        magCtx.drawImage(interactCanvas, srcX, srcY, srcW, srcH, 0, 0, magCanvas.width, magCanvas.height);
         
-        // Draw crisp thin crosshair
+        // Draw crosshair
         magCtx.strokeStyle = measureColor.value;
-        magCtx.lineWidth = 1;
+        magCtx.lineWidth = 1 * DPR;
         magCtx.beginPath();
-        magCtx.moveTo(magSize/2, 0); magCtx.lineTo(magSize/2, magSize);
-        magCtx.moveTo(0, magSize/2); magCtx.lineTo(magSize, magSize/2);
+        magCtx.moveTo(magCanvas.width/2, 0); magCtx.lineTo(magCanvas.width/2, magCanvas.height);
+        magCtx.moveTo(0, magCanvas.height/2); magCtx.lineTo(magCanvas.width, magCanvas.height/2);
         magCtx.stroke();
     }
 
-    // Engine connection remains the same
+    // --- BACKGROUND ENGINE (Unchanged) ---
     const analyzerWorker = new Worker('worker.js');
     analyzeBtn.addEventListener('click', async () => {
         analyzeBtn.classList.add('hidden');
