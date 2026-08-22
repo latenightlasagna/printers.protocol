@@ -1,6 +1,6 @@
 document.addEventListener('DOMContentLoaded', () => {
     
-    // Core Layout
+    // UI Elements
     const dropzone = document.getElementById('dropzone');
     const uploadBtn = document.getElementById('upload-btn');
     const fileInput = document.getElementById('file-input');
@@ -12,7 +12,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const resultsPanel = document.getElementById('results-panel');
     const loadingState = document.getElementById('loading-state');
     
-    // Settings & Mockup Tools
+    // Tools
     const printMedium = document.getElementById('print-medium');
     const customStrokeInput = document.getElementById('custom-stroke');
     const customStrokeGroup = document.getElementById('custom-stroke-group');
@@ -25,8 +25,10 @@ document.addEventListener('DOMContentLoaded', () => {
     
     const btnActualSize = document.getElementById('btn-actual-size');
     const actualSizeModal = document.getElementById('actual-size-modal');
+    const btnFitScreen = document.getElementById('btn-fit-screen');
     const toggleMockupBtn = document.getElementById('toggle-mockup');
     const mockupToolbar = document.getElementById('mockup-toolbar');
+    
     const mockupScale = document.getElementById('mockup-scale');
     const scaleReadout = document.getElementById('scale-readout');
     const mockupX = document.getElementById('mockup-x');
@@ -50,25 +52,21 @@ document.addEventListener('DOMContentLoaded', () => {
     const magCanvas = document.getElementById('mag-canvas');
     const magCtx = magCanvas.getContext('2d');
     
-    // Memory & Constants
+    // State Memory
     let pdfDocument = null, pdfPage = null;
     let cachedArtworkCanvas = document.createElement('canvas'); 
-    const mockupImg = new Image();
-    mockupImg.src = 'tshirt_sewingpattern.png';
+    const mockupImg = new Image(); mockupImg.src = 'tshirt_sewingpattern.png';
     
-    const TARGET_DPI = 300; 
-    const CM_TO_INCHES = 0.393701;
-    const PX_PER_CM = 37.795275; 
+    const TARGET_DPI = 300, CM_TO_INCHES = 0.393701, PX_PER_CM = 37.795275; 
     const DPR = window.devicePixelRatio || 1; 
     const MOCKUP_W = 60, MOCKUP_H = 80; 
     
-    let isMeasuringMode = false, isDrawingLine = false;
-    let isMockupMode = false;
+    let isMeasuringMode = false, isDrawingLine = false, isMockupMode = false, isFitScreen = false;
     let p1 = null, p2 = null;
-    let lastMouseCssX = 0, lastMouseCssY = 0;
+    let lastClientX = 0, lastClientY = 0;
     let artWidthCm = 0, artHeightCm = 0;
 
-    // --- 0. SETTINGS LOGIC ---
+    // --- 0. UI SETTINGS ---
     function updateStrokeInfo() {
         const opt = printMedium.options[printMedium.selectedIndex];
         let min = opt.value === 'custom' ? parseFloat(customStrokeInput.value) : parseFloat(opt.getAttribute('data-min-stroke'));
@@ -79,7 +77,22 @@ document.addEventListener('DOMContentLoaded', () => {
     customStrokeInput.addEventListener('input', updateStrokeInfo);
     updateStrokeInfo();
 
-    // --- 1. UPLOAD & RESET LOGIC ---
+    // Reset Defaults on Double Click
+    document.getElementById('label-thickness').addEventListener('dblclick', () => {
+        measureThickness.value = 2; document.getElementById('thickness-readout').innerText = "2.0 pt";
+        if(p1 && p2 && !isDrawingLine) renderLine(p1, p2);
+    });
+    document.getElementById('label-mockup-scale').addEventListener('dblclick', () => {
+        mockupScale.value = 100; scaleReadout.innerText = "100%"; renderWorkspace();
+    });
+    document.getElementById('label-mockup-x').addEventListener('dblclick', () => {
+        mockupX.value = Math.max(0, (MOCKUP_W - artWidthCm) / 2).toFixed(1); renderWorkspace();
+    });
+    document.getElementById('label-mockup-y').addEventListener('dblclick', () => {
+        mockupY.value = 10; renderWorkspace();
+    });
+
+    // --- 1. UPLOAD LOGIC ---
     uploadBtn.addEventListener('click', () => fileInput.click());
     fileInput.addEventListener('change', (e) => { if(e.target.files.length) handleFile(e.target.files[0]); });
     dropzone.addEventListener('dragover', (e) => { e.preventDefault(); dropzone.style.borderColor = 'var(--text-color)'; });
@@ -96,76 +109,70 @@ document.addEventListener('DOMContentLoaded', () => {
         pdfPage = await pdfDocument.getPage(1); 
         const unscaled = pdfPage.getViewport({ scale: 1.0 });
         
-        // Exact metadata extraction
         artWidthCm = (unscaled.width / 72) * 2.54;
         artHeightCm = (unscaled.height / 72) * 2.54;
-        widthInput.value = artWidthCm.toFixed(2);
-        heightInput.value = artHeightCm.toFixed(2);
+        widthInput.value = artWidthCm.toFixed(2); heightInput.value = artHeightCm.toFixed(2);
         
         const safeScale = Math.min(1500 / unscaled.width, 2.0); 
         const viewport = pdfPage.getViewport({ scale: safeScale });
 
-        canvas.width = overlayCanvas.width = viewport.width;
-        canvas.height = overlayCanvas.height = viewport.height;
+        canvas.width = overlayCanvas.width = viewport.width; canvas.height = overlayCanvas.height = viewport.height;
         await pdfPage.render({ canvasContext: ctx, viewport: viewport }).promise;
         
         mockupX.value = Math.max(0, (MOCKUP_W - artWidthCm) / 2).toFixed(1);
         mockupY.value = 10;
-        
         validateForm();
     }
 
     resetMainBtn.addEventListener('click', () => location.reload());
 
     [widthInput, heightInput].forEach(el => el.addEventListener('input', () => {
-        artWidthCm = parseFloat(widthInput.value) || 0;
-        artHeightCm = parseFloat(heightInput.value) || 0;
+        artWidthCm = parseFloat(widthInput.value) || 0; artHeightCm = parseFloat(heightInput.value) || 0;
         validateForm();
     }));
-    
-    function validateForm() {
-        analyzeBtn.disabled = !(pdfDocument && artWidthCm > 0 && artHeightCm > 0);
-    }
+    function validateForm() { analyzeBtn.disabled = !(pdfDocument && artWidthCm > 0 && artHeightCm > 0); }
 
-    // --- 2. WORKSPACE RENDER ENGINE ---
+    // --- 2. RENDER ENGINE & ZOOM ---
     btnActualSize.addEventListener('click', async () => {
         if(!artWidthCm || !artHeightCm) return;
+        const freshPage = await pdfDocument.getPage(1);
+        const cssWidth = artWidthCm * PX_PER_CM, cssHeight = artHeightCm * PX_PER_CM;
         
-        try {
-            // ALWAYS request a fresh page instance to bypass pdf.js RenderTask state locks
-            const freshPage = await pdfDocument.getPage(1);
-            
-            const cssWidth = artWidthCm * PX_PER_CM;
-            const cssHeight = artHeightCm * PX_PER_CM;
-            
-            cachedArtworkCanvas.width = cssWidth * DPR; 
-            cachedArtworkCanvas.height = cssHeight * DPR;
-            const reqScale = (cssWidth * DPR) / freshPage.getViewport({scale: 1}).width;
-            
-            await freshPage.render({ 
-                canvasContext: cachedArtworkCanvas.getContext('2d'), 
-                viewport: freshPage.getViewport({scale: reqScale}) 
-            }).promise;
-            
-            renderWorkspace();
-            actualSizeModal.classList.remove('hidden');
-        } catch (err) {
-            console.error("Workspace Render Error:", err);
-            alert("Failed to render the workspace. Please reload the file.");
-        }
+        cachedArtworkCanvas.width = cssWidth * DPR; cachedArtworkCanvas.height = cssHeight * DPR;
+        const reqScale = (cssWidth * DPR) / freshPage.getViewport({scale: 1}).width;
+        await freshPage.render({ canvasContext: cachedArtworkCanvas.getContext('2d'), viewport: freshPage.getViewport({scale: reqScale}) }).promise;
+        
+        renderWorkspace();
+        actualSizeModal.classList.remove('hidden');
     });
+
+    btnFitScreen.addEventListener('click', () => {
+        isFitScreen = !isFitScreen;
+        btnFitScreen.innerText = isFitScreen ? "100% Zoom" : "Fit to Screen";
+        renderWorkspace();
+    });
+
+    window.addEventListener('resize', () => { if(isFitScreen) renderWorkspace(); });
 
     function renderWorkspace() {
         const targetW_Cm = isMockupMode ? MOCKUP_W : artWidthCm;
         const targetH_Cm = isMockupMode ? MOCKUP_H : artHeightCm;
         
-        const cssWidth = targetW_Cm * PX_PER_CM;
-        const cssHeight = targetH_Cm * PX_PER_CM;
+        let viewScale = 1.0;
+        if(isFitScreen) {
+            const scrollArea = document.querySelector('.modal-scroll-area');
+            const availW = scrollArea.clientWidth - 80, availH = scrollArea.clientHeight - 80;
+            const fullW = (targetW_Cm * PX_PER_CM) + 30, fullH = (targetH_Cm * PX_PER_CM) + 30;
+            viewScale = Math.min(availW / fullW, availH / fullH, 1);
+        }
         
-        actualSizeCanvas.width = interactCanvas.width = cssWidth * DPR;
-        actualSizeCanvas.height = interactCanvas.height = cssHeight * DPR;
-        actualSizeCanvas.style.width = interactCanvas.style.width = actualSizeContainer.style.width = `${cssWidth}px`;
-        actualSizeCanvas.style.height = interactCanvas.style.height = actualSizeContainer.style.height = `${cssHeight}px`; 
+        const baseCssW = targetW_Cm * PX_PER_CM, baseCssH = targetH_Cm * PX_PER_CM;
+        const scaledCssW = baseCssW * viewScale, scaledCssH = baseCssH * viewScale;
+        
+        actualSizeCanvas.width = interactCanvas.width = baseCssW * DPR;
+        actualSizeCanvas.height = interactCanvas.height = baseCssH * DPR;
+        actualSizeContainer.style.width = interactCanvas.style.width = actualSizeCanvas.style.width = `${scaledCssW}px`;
+        actualSizeContainer.style.height = interactCanvas.style.height = actualSizeCanvas.style.height = `${scaledCssH}px`; 
         
         actualCtx.clearRect(0, 0, actualSizeCanvas.width, actualSizeCanvas.height);
         
@@ -177,8 +184,13 @@ document.addEventListener('DOMContentLoaded', () => {
             const scaleFactor = parseFloat(mockupScale.value) / 100;
             const destW = cachedArtworkCanvas.width * scaleFactor;
             const destH = cachedArtworkCanvas.height * scaleFactor;
-            const destX = parseFloat(mockupX.value) * PX_PER_CM * DPR;
-            const destY = parseFloat(mockupY.value) * PX_PER_CM * DPR;
+            
+            // X and Y pivot strictly from the center of the artwork map
+            const inputX = parseFloat(mockupX.value) * PX_PER_CM * DPR;
+            const inputY = parseFloat(mockupY.value) * PX_PER_CM * DPR;
+            const destX = inputX - (destW / 2);
+            const destY = inputY - (destH / 2);
+            
             actualCtx.drawImage(cachedArtworkCanvas, destX, destY, destW, destH);
             actualSizeContainer.style.background = "var(--bg-color)";
         } else {
@@ -186,31 +198,28 @@ document.addEventListener('DOMContentLoaded', () => {
             actualSizeContainer.style.background = "var(--white)";
         }
 
-        renderRulers(targetW_Cm, targetH_Cm, cssWidth, cssHeight);
-        
+        renderRulers(targetW_Cm, targetH_Cm, baseCssW, baseCssH, scaledCssW, scaledCssH);
         if(p1 && p2 && !isDrawingLine) renderLine(p1, p2);
     }
 
-    function renderRulers(wCm, hCm, cssWidth, cssHeight) {
-        modalRulerTop.width = cssWidth * DPR; modalRulerTop.height = 30 * DPR;
-        modalRulerTop.style.width = `${cssWidth}px`; modalRulerTop.style.height = `30px`;
-        const ctxTop = modalRulerTop.getContext('2d');
-        ctxTop.scale(DPR, DPR); 
+    function renderRulers(wCm, hCm, baseW, baseH, scaledW, scaledH) {
+        modalRulerTop.width = baseW * DPR; modalRulerTop.height = 30 * DPR;
+        modalRulerTop.style.width = `${scaledW}px`; modalRulerTop.style.height = `30px`;
+        const ctxTop = modalRulerTop.getContext('2d'); ctxTop.scale(DPR, DPR); 
         ctxTop.fillStyle = "var(--text-color)"; ctxTop.font = "10px 'IBM Plex Sans'";
         
-        modalRulerLeft.width = 30 * DPR; modalRulerLeft.height = cssHeight * DPR;
-        modalRulerLeft.style.width = `30px`; modalRulerLeft.style.height = `${cssHeight}px`;
-        const ctxLeft = modalRulerLeft.getContext('2d');
-        ctxLeft.scale(DPR, DPR);
+        modalRulerLeft.width = 30 * DPR; modalRulerLeft.height = baseH * DPR;
+        modalRulerLeft.style.width = `30px`; modalRulerLeft.style.height = `${scaledH}px`;
+        const ctxLeft = modalRulerLeft.getContext('2d'); ctxLeft.scale(DPR, DPR);
         ctxLeft.fillStyle = "var(--text-color)"; ctxLeft.font = "10px 'IBM Plex Sans'";
 
-        for(let i = 0; i <= Math.ceil(wCm); i++) {
+        for(let i=0; i <= Math.ceil(wCm); i++) {
             const x = i * PX_PER_CM;
             ctxTop.fillRect(x, 15, 1, 15);
             if(i < wCm) ctxTop.fillRect(x + PX_PER_CM/2, 22, 1, 8); 
             if(i > 0) ctxTop.fillText(i, x + 3, 12);
         }
-        for(let i = 0; i <= Math.ceil(hCm); i++) {
+        for(let i=0; i <= Math.ceil(hCm); i++) {
             const y = i * PX_PER_CM;
             ctxLeft.fillRect(15, y, 15, 1);
             if(i < hCm) ctxLeft.fillRect(22, y + PX_PER_CM/2, 8, 1);
@@ -218,25 +227,22 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // --- 3. MOCKUP INTERACTION LOGIC ---
+    // --- 3. MOCKUP INTERACTION ---
     toggleMockupBtn.addEventListener('click', () => {
         isMockupMode = !isMockupMode;
         mockupToolbar.classList.toggle('hidden', !isMockupMode);
         toggleMockupBtn.innerText = `Mockup Mode: ${isMockupMode ? 'ON' : 'OFF'}`;
         toggleMockupBtn.style.color = isMockupMode ? measureColor.value : "var(--text-color)";
-        
-        p1 = p2 = null; isDrawingLine = false; 
-        measurementReadout.innerText = "0.00 mm";
+        p1 = p2 = null; isDrawingLine = false; measurementReadout.innerText = "0.00 mm";
         interactCtx.clearRect(0,0, interactCanvas.width, interactCanvas.height);
         renderWorkspace();
     });
 
     [mockupScale, mockupX, mockupY].forEach(el => el.addEventListener('input', () => {
-        scaleReadout.innerText = mockupScale.value + "%";
-        renderWorkspace();
+        scaleReadout.innerText = mockupScale.value + "%"; renderWorkspace();
     }));
 
-    // --- 4. INTERACTIVE TOOL & UI READOUT ---
+    // --- 4. MEASUREMENT LOGIC ---
     toggleMeasureBtn.addEventListener('click', () => {
         isMeasuringMode = !isMeasuringMode;
         actualSizeContainer.classList.toggle('measuring', isMeasuringMode);
@@ -261,25 +267,33 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     measureThickness.addEventListener('input', () => {
+        document.getElementById('thickness-readout').innerText = parseFloat(measureThickness.value).toFixed(1) + " pt";
         if(p1 && p2 && !isDrawingLine) renderLine(p1, p2);
     });
 
     interactCanvas.addEventListener('mouseenter', () => { if(isMeasuringMode) magnifier.classList.remove('hidden'); });
     interactCanvas.addEventListener('mouseleave', () => { magnifier.classList.add('hidden'); });
 
+    // Mathematical resolution decoupling (Supports Fit-to-screen transforms flawlessly)
+    function getMousePos(clientX, clientY) {
+        const rect = interactCanvas.getBoundingClientRect();
+        const scaleX = interactCanvas.width / rect.width, scaleY = interactCanvas.height / rect.height;
+        return { x: (clientX - rect.left) * scaleX, y: (clientY - rect.top) * scaleY };
+    }
+
     interactCanvas.addEventListener('mousedown', (e) => {
         if(!isMeasuringMode) return;
-        const coords = { x: e.offsetX * DPR, y: e.offsetY * DPR };
+        const coords = getMousePos(e.clientX, e.clientY);
         if (!isDrawingLine) { p1 = coords; isDrawingLine = true; } 
         else { p2 = applyShiftConstraint(coords, e.shiftKey); isDrawingLine = false; renderLine(p1, p2); }
-        updateMagnifier(e.offsetX, e.offsetY);
+        updateMagnifier(e.clientX, e.clientY);
     });
 
     interactCanvas.addEventListener('mousemove', (e) => {
         if(!isMeasuringMode) return;
-        lastMouseCssX = e.offsetX; lastMouseCssY = e.offsetY;
-        if(isDrawingLine) renderLine(p1, applyShiftConstraint({ x: e.offsetX * DPR, y: e.offsetY * DPR }, e.shiftKey));
-        updateMagnifier(e.offsetX, e.offsetY);
+        lastClientX = e.clientX; lastClientY = e.clientY;
+        if(isDrawingLine) renderLine(p1, applyShiftConstraint(getMousePos(e.clientX, e.clientY), e.shiftKey));
+        updateMagnifier(e.clientX, e.clientY);
     });
 
     function applyShiftConstraint(current, shiftPressed) {
@@ -292,7 +306,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function renderLine(start, end) {
         interactCtx.clearRect(0,0, interactCanvas.width, interactCanvas.height);
-        
         interactCtx.strokeStyle = interactCtx.fillStyle = measureColor.value;
         interactCtx.lineWidth = parseFloat(measureThickness.value) * DPR;
         
@@ -309,28 +322,28 @@ document.addEventListener('DOMContentLoaded', () => {
         interactCtx.lineTo(end.x + Math.cos(pAngle)*tickL, end.y + Math.sin(pAngle)*tickL);
         interactCtx.stroke();
 
-        // Universal Physical Distance Calculation (Independent of Canvas dimensions)
         const cssDist = Math.hypot(end.x - start.x, end.y - start.y) / DPR;
-        const distanceMm = (cssDist / PX_PER_CM) * 10;
-        measurementReadout.innerText = distanceMm.toFixed(2) + " mm";
+        measurementReadout.innerText = ((cssDist / PX_PER_CM) * 10).toFixed(2) + " mm";
     }
 
-    function updateMagnifier(cssX, cssY) {
+    function updateMagnifier(clientX, clientY) {
+        const rect = interactCanvas.getBoundingClientRect();
+        const cssX = clientX - rect.left, cssY = clientY - rect.top;
         magnifier.style.left = `${cssX}px`; magnifier.style.top = `${cssY}px`;
+        
         const magSize = 120, zoom = 4.0; 
         magCanvas.width = magCanvas.height = magSize * DPR;
         magCanvas.style.width = magCanvas.style.height = `${magSize}px`;
         
+        const scaleX = interactCanvas.width / rect.width, scaleY = interactCanvas.height / rect.height;
+        const intX = cssX * scaleX, intY = cssY * scaleY;
         const srcW = (magSize / zoom) * DPR, srcH = (magSize / zoom) * DPR;
-        const srcX = (cssX * DPR) - (srcW / 2), srcY = (cssY * DPR) - (srcH / 2);
         
-        magCtx.fillStyle = "#ffffff";
-        magCtx.fillRect(0, 0, magCanvas.width, magCanvas.height);
-        magCtx.drawImage(actualSizeCanvas, srcX, srcY, srcW, srcH, 0, 0, magCanvas.width, magCanvas.height);
-        magCtx.drawImage(interactCanvas, srcX, srcY, srcW, srcH, 0, 0, magCanvas.width, magCanvas.height);
+        magCtx.fillStyle = "#ffffff"; magCtx.fillRect(0, 0, magCanvas.width, magCanvas.height);
+        magCtx.drawImage(actualSizeCanvas, intX - (srcW/2), intY - (srcH/2), srcW, srcH, 0, 0, magCanvas.width, magCanvas.height);
+        magCtx.drawImage(interactCanvas, intX - (srcW/2), intY - (srcH/2), srcW, srcH, 0, 0, magCanvas.width, magCanvas.height);
         
-        magCtx.strokeStyle = measureColor.value;
-        magCtx.lineWidth = 1 * DPR;
+        magCtx.strokeStyle = measureColor.value; magCtx.lineWidth = 1 * DPR;
         magCtx.beginPath();
         magCtx.moveTo(magCanvas.width/2, 0); magCtx.lineTo(magCanvas.width/2, magCanvas.height);
         magCtx.moveTo(0, magCanvas.height/2); magCtx.lineTo(magCanvas.width, magCanvas.height/2);
@@ -339,72 +352,50 @@ document.addEventListener('DOMContentLoaded', () => {
     
     document.getElementById('close-modal').addEventListener('click', () => {
         actualSizeModal.classList.add('hidden');
-        isMeasuringMode = isDrawingLine = false;
-        p1 = p2 = null; measurementReadout.innerText = "0.00 mm";
+        isMeasuringMode = isDrawingLine = false; p1 = p2 = null; measurementReadout.innerText = "0.00 mm";
         interactCtx.clearRect(0,0, interactCanvas.width, interactCanvas.height);
-        actualSizeContainer.classList.remove('measuring');
-        magnifier.classList.add('hidden');
-        toggleMeasureBtn.innerText = "Measure: OFF";
-        toggleMeasureBtn.style.color = "var(--text-color)";
+        actualSizeContainer.classList.remove('measuring'); magnifier.classList.add('hidden');
+        toggleMeasureBtn.innerText = "Measure: OFF"; toggleMeasureBtn.style.color = "var(--text-color)";
     });
 
     // --- 5. WORKER ENGINE LOGIC ---
-    const printMediumDropdown = document.getElementById('print-medium');
-    const customStrokeInputVal = document.getElementById('custom-stroke');
-    
     const analyzerWorker = new Worker('worker.js');
     analyzeBtn.addEventListener('click', async () => {
-        analyzeBtn.classList.add('hidden');
-        resultsPanel.classList.add('hidden');
-        loadingState.classList.remove('hidden');
+        analyzeBtn.classList.add('hidden'); resultsPanel.classList.add('hidden'); loadingState.classList.remove('hidden');
         document.getElementById('progress-fill').style.width = '5%';
 
         const freshPage = await pdfDocument.getPage(1);
-        const wCm = parseFloat(widthInput.value);
-        const reqScale = ((wCm * CM_TO_INCHES) * TARGET_DPI) / freshPage.getViewport({scale:1}).width;
+        const reqScale = ((artWidthCm * CM_TO_INCHES) * TARGET_DPI) / freshPage.getViewport({scale:1}).width;
         
-        const opt = printMediumDropdown.options[printMediumDropdown.selectedIndex];
-        let minStrokeMm = opt.value === 'custom' ? parseFloat(customStrokeInputVal.value) : parseFloat(opt.getAttribute('data-min-stroke'));
-        const minStrokePixels = minStrokeMm * (TARGET_DPI / 25.4);
-
-        const highResCanvas = document.createElement('canvas');
-        const viewport = freshPage.getViewport({ scale: reqScale });
+        const opt = printMedium.options[printMedium.selectedIndex];
+        let minStrokeMm = opt.value === 'custom' ? parseFloat(customStrokeInput.value) : parseFloat(opt.getAttribute('data-min-stroke'));
+        
+        const highResCanvas = document.createElement('canvas'); const viewport = freshPage.getViewport({ scale: reqScale });
         highResCanvas.width = viewport.width; highResCanvas.height = viewport.height;
-        
         await freshPage.render({ canvasContext: highResCanvas.getContext('2d'), viewport: viewport }).promise;
-        const imageData = highResCanvas.getContext('2d').getImageData(0, 0, viewport.width, viewport.height);
-        analyzerWorker.postMessage({ imageData, minStrokePixels, targetWidth: viewport.width, targetHeight: viewport.height });
+        
+        analyzerWorker.postMessage({ imageData: highResCanvas.getContext('2d').getImageData(0, 0, viewport.width, viewport.height), minStrokePixels: minStrokeMm * (TARGET_DPI / 25.4), targetWidth: viewport.width, targetHeight: viewport.height });
     });
 
     analyzerWorker.onmessage = function(e) {
         if (e.data.type === 'progress') document.getElementById('progress-fill').style.width = `${e.data.percent}%`;
-        if (e.data.type === 'complete') {
-            document.getElementById('progress-fill').style.width = '100%';
-            setTimeout(() => applyResults(e.data.results), 400); 
-        }
+        if (e.data.type === 'complete') { document.getElementById('progress-fill').style.width = '100%'; setTimeout(() => applyResults(e.data.results), 400); }
     };
 
     function applyResults(results) {
-        loadingState.classList.add('hidden');
-        resultsPanel.classList.remove('hidden');
-        analyzeBtn.classList.remove('hidden');
-        analyzeBtn.innerText = "Re-Analyze Printfile";
+        loadingState.classList.add('hidden'); resultsPanel.classList.remove('hidden');
+        analyzeBtn.classList.remove('hidden'); analyzeBtn.innerText = "Re-Analyze Printfile";
 
         document.getElementById('res-gray').innerText = results.hasGrayscale ? "Failed (Grayscale found)" : "Pass (Pure Black/White)";
         document.getElementById('res-gray').style.color = results.hasGrayscale ? "var(--neon-pink)" : "var(--text-color)";
         document.getElementById('res-stroke').innerText = results.hasThinStrokes ? "Failed (Areas too thin)" : "Pass (Stroke width OK)";
         document.getElementById('res-stroke').style.color = results.hasThinStrokes ? "var(--neon-pink)" : "var(--text-color)";
         
-        const tempCanvas = document.createElement('canvas');
-        tempCanvas.width = results.width; tempCanvas.height = results.height;
+        const tempCanvas = document.createElement('canvas'); tempCanvas.width = results.width; tempCanvas.height = results.height;
         tempCanvas.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(results.overlayBuffer), results.width, results.height), 0, 0);
-        
-        const overlayCtx = overlayCanvas.getContext('2d');
-        overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
-        overlayCtx.drawImage(tempCanvas, 0, 0, overlayCanvas.width, overlayCanvas.height);
+        overlayCanvas.getContext('2d').clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+        overlayCanvas.getContext('2d').drawImage(tempCanvas, 0, 0, overlayCanvas.width, overlayCanvas.height);
     }
 
-    document.getElementById('zebra-meter').addEventListener('change', (e) => {
-        e.target.checked ? overlayCanvas.classList.remove('hidden') : overlayCanvas.classList.add('hidden');
-    });
+    document.getElementById('zebra-meter').addEventListener('change', (e) => { e.target.checked ? overlayCanvas.classList.remove('hidden') : overlayCanvas.classList.add('hidden'); });
 });
