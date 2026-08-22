@@ -66,7 +66,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let lastClientX = 0, lastClientY = 0;
     let artWidthCm = 0, artHeightCm = 0;
 
-    // --- 0. UI SETTINGS ---
+    // --- 0. UI SETTINGS & COLOR ENGINE ---
     function updateStrokeInfo() {
         const opt = printMedium.options[printMedium.selectedIndex];
         let min = opt.value === 'custom' ? parseFloat(customStrokeInput.value) : parseFloat(opt.getAttribute('data-min-stroke'));
@@ -76,6 +76,30 @@ document.addEventListener('DOMContentLoaded', () => {
     printMedium.addEventListener('change', updateStrokeInfo);
     customStrokeInput.addEventListener('input', updateStrokeInfo);
     updateStrokeInfo();
+
+    function getComplementaryHex(hex) {
+        const r = 255 - parseInt(hex.slice(1, 3), 16);
+        const g = 255 - parseInt(hex.slice(3, 5), 16);
+        const b = 255 - parseInt(hex.slice(5, 7), 16);
+        return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
+    }
+
+    function syncToolColors() {
+        const color = measureColor.value;
+        const compColor = getComplementaryHex(color);
+        
+        measurementReadout.style.color = color;
+        
+        if (isMeasuringMode) {
+            toggleMeasureBtn.style.color = color;
+            resetMeasureBtn.style.color = compColor;
+        } else {
+            toggleMeasureBtn.style.color = "var(--text-color)";
+        }
+        
+        if (isMockupMode) toggleMockupBtn.style.color = color;
+        else toggleMockupBtn.style.color = "var(--text-color)";
+    }
 
     // Reset Defaults on Double Click
     document.getElementById('label-thickness').addEventListener('dblclick', () => {
@@ -89,7 +113,7 @@ document.addEventListener('DOMContentLoaded', () => {
         mockupX.value = Math.max(0, (MOCKUP_W - artWidthCm) / 2).toFixed(1); renderWorkspace();
     });
     document.getElementById('label-mockup-y').addEventListener('dblclick', () => {
-        mockupY.value = 10; renderWorkspace();
+        mockupY.value = Math.max(0, (MOCKUP_H - artHeightCm) / 2).toFixed(1); renderWorkspace();
     });
 
     // --- 1. UPLOAD LOGIC ---
@@ -119,8 +143,9 @@ document.addEventListener('DOMContentLoaded', () => {
         canvas.width = overlayCanvas.width = viewport.width; canvas.height = overlayCanvas.height = viewport.height;
         await pdfPage.render({ canvasContext: ctx, viewport: viewport }).promise;
         
+        // Setup default mockup positioning centered exactly on X and Y
         mockupX.value = Math.max(0, (MOCKUP_W - artWidthCm) / 2).toFixed(1);
-        mockupY.value = 10;
+        mockupY.value = Math.max(0, (MOCKUP_H - artHeightCm) / 2).toFixed(1);
         validateForm();
     }
 
@@ -232,7 +257,8 @@ document.addEventListener('DOMContentLoaded', () => {
         isMockupMode = !isMockupMode;
         mockupToolbar.classList.toggle('hidden', !isMockupMode);
         toggleMockupBtn.innerText = `Mockup Mode: ${isMockupMode ? 'ON' : 'OFF'}`;
-        toggleMockupBtn.style.color = isMockupMode ? measureColor.value : "var(--text-color)";
+        
+        syncToolColors();
         p1 = p2 = null; isDrawingLine = false; measurementReadout.innerText = "0.00 mm";
         interactCtx.clearRect(0,0, interactCanvas.width, interactCanvas.height);
         renderWorkspace();
@@ -248,9 +274,18 @@ document.addEventListener('DOMContentLoaded', () => {
         actualSizeContainer.classList.toggle('measuring', isMeasuringMode);
         document.getElementById('measure-hint').classList.toggle('hidden', !isMeasuringMode);
         toggleMeasureBtn.innerText = `Measure: ${isMeasuringMode ? 'ON' : 'OFF'}`;
-        toggleMeasureBtn.style.color = isMeasuringMode ? measureColor.value : "var(--text-color)";
-        if(!isMeasuringMode) magnifier.classList.add('hidden');
+        
+        if (isMeasuringMode) {
+            resetMeasureBtn.classList.remove('hidden');
+            resetMeasureBtn.classList.add('smooth-in');
+        } else {
+            resetMeasureBtn.classList.add('hidden');
+            resetMeasureBtn.classList.remove('smooth-in');
+            magnifier.classList.add('hidden');
+        }
+        
         isDrawingLine = false;
+        syncToolColors();
     });
 
     resetMeasureBtn.addEventListener('click', () => {
@@ -259,10 +294,8 @@ document.addEventListener('DOMContentLoaded', () => {
         measurementReadout.innerText = "0.00 mm";
     });
 
-    measureColor.addEventListener('input', (e) => {
-        if(isMeasuringMode) toggleMeasureBtn.style.color = e.target.value;
-        if(isMockupMode) toggleMockupBtn.style.color = e.target.value;
-        measurementReadout.style.color = e.target.value; 
+    measureColor.addEventListener('input', () => {
+        syncToolColors();
         if(p1 && p2 && !isDrawingLine) renderLine(p1, p2);
     });
 
@@ -274,7 +307,6 @@ document.addEventListener('DOMContentLoaded', () => {
     interactCanvas.addEventListener('mouseenter', () => { if(isMeasuringMode) magnifier.classList.remove('hidden'); });
     interactCanvas.addEventListener('mouseleave', () => { magnifier.classList.add('hidden'); });
 
-    // Mathematical resolution decoupling (Supports Fit-to-screen transforms flawlessly)
     function getMousePos(clientX, clientY) {
         const rect = interactCanvas.getBoundingClientRect();
         const scaleX = interactCanvas.width / rect.width, scaleY = interactCanvas.height / rect.height;
@@ -352,13 +384,23 @@ document.addEventListener('DOMContentLoaded', () => {
     
     document.getElementById('close-modal').addEventListener('click', () => {
         actualSizeModal.classList.add('hidden');
-        isMeasuringMode = isDrawingLine = false; p1 = p2 = null; measurementReadout.innerText = "0.00 mm";
+        isMeasuringMode = isDrawingLine = false;
+        p1 = p2 = null; measurementReadout.innerText = "0.00 mm";
         interactCtx.clearRect(0,0, interactCanvas.width, interactCanvas.height);
-        actualSizeContainer.classList.remove('measuring'); magnifier.classList.add('hidden');
-        toggleMeasureBtn.innerText = "Measure: OFF"; toggleMeasureBtn.style.color = "var(--text-color)";
+        actualSizeContainer.classList.remove('measuring');
+        magnifier.classList.add('hidden');
+        
+        toggleMeasureBtn.innerText = "Measure: OFF";
+        resetMeasureBtn.classList.add('hidden');
+        resetMeasureBtn.classList.remove('smooth-in');
+        document.getElementById('measure-hint').classList.add('hidden');
+        syncToolColors();
     });
 
     // --- 5. WORKER ENGINE LOGIC ---
+    const printMediumDropdown = document.getElementById('print-medium');
+    const customStrokeInputVal = document.getElementById('custom-stroke');
+    
     const analyzerWorker = new Worker('worker.js');
     analyzeBtn.addEventListener('click', async () => {
         analyzeBtn.classList.add('hidden'); resultsPanel.classList.add('hidden'); loadingState.classList.remove('hidden');
@@ -367,8 +409,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const freshPage = await pdfDocument.getPage(1);
         const reqScale = ((artWidthCm * CM_TO_INCHES) * TARGET_DPI) / freshPage.getViewport({scale:1}).width;
         
-        const opt = printMedium.options[printMedium.selectedIndex];
-        let minStrokeMm = opt.value === 'custom' ? parseFloat(customStrokeInput.value) : parseFloat(opt.getAttribute('data-min-stroke'));
+        const opt = printMediumDropdown.options[printMediumDropdown.selectedIndex];
+        let minStrokeMm = opt.value === 'custom' ? parseFloat(customStrokeInputVal.value) : parseFloat(opt.getAttribute('data-min-stroke'));
         
         const highResCanvas = document.createElement('canvas'); const viewport = freshPage.getViewport({ scale: reqScale });
         highResCanvas.width = viewport.width; highResCanvas.height = viewport.height;
