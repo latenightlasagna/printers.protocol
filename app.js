@@ -88,46 +88,33 @@ document.addEventListener('DOMContentLoaded', () => {
         const color = measureColor.value;
         const compColor = getComplementaryHex(color);
         
+        // Ensure readout values dynamically map to the chosen color
         measurementReadout.style.color = color;
+        document.getElementById('thickness-readout').style.color = color;
+        scaleReadout.style.color = color;
         
-        if (isMeasuringMode) {
-            toggleMeasureBtn.style.backgroundColor = color;
-            toggleMeasureBtn.style.color = "var(--bg-color)";
-            toggleMeasureBtn.style.borderColor = color;
-            
-            resetMeasureBtn.style.backgroundColor = compColor;
-            resetMeasureBtn.style.color = "var(--bg-color)";
-            resetMeasureBtn.style.borderColor = compColor;
-        } else {
-            toggleMeasureBtn.style.backgroundColor = "";
-            toggleMeasureBtn.style.color = "";
-            toggleMeasureBtn.style.borderColor = "";
-        }
-        
-        if (isMockupMode) {
-            toggleMockupBtn.style.backgroundColor = color;
-            toggleMockupBtn.style.color = "var(--bg-color)";
-            toggleMockupBtn.style.borderColor = color;
-        } else {
-            toggleMockupBtn.style.backgroundColor = "";
-            toggleMockupBtn.style.color = "";
-            toggleMockupBtn.style.borderColor = "";
-        }
+        // Delegate all background/text reversing logic exclusively to CSS
+        toggleMeasureBtn.style.setProperty('--theme-color', color);
+        resetMeasureBtn.style.setProperty('--theme-color', compColor);
+        toggleMockupBtn.style.setProperty('--theme-color', color);
+
+        toggleMeasureBtn.classList.toggle('active', isMeasuringMode);
+        toggleMockupBtn.classList.toggle('active', isMockupMode);
     }
 
     // Reset Defaults on Double Click
     document.getElementById('label-thickness').addEventListener('dblclick', () => {
-        measureThickness.value = 2; document.getElementById('thickness-readout').innerText = "2.0 pt";
+        measureThickness.value = 1.0; document.getElementById('thickness-readout').innerText = "1.0 pt";
         if(p1 && p2 && !isDrawingLine) renderLine(p1, p2);
     });
     document.getElementById('label-mockup-scale').addEventListener('dblclick', () => {
         mockupScale.value = 100; scaleReadout.innerText = "100%"; renderWorkspace();
     });
     document.getElementById('label-mockup-x').addEventListener('dblclick', () => {
-        mockupX.value = Math.max(0, (MOCKUP_W - artWidthCm) / 2).toFixed(1); renderWorkspace();
+        mockupX.value = 30.0; renderWorkspace();
     });
     document.getElementById('label-mockup-y').addEventListener('dblclick', () => {
-        mockupY.value = Math.max(0, (MOCKUP_H - artHeightCm) / 2).toFixed(1); renderWorkspace();
+        mockupY.value = 32.0; renderWorkspace();
     });
 
     // --- 1. UPLOAD LOGIC ---
@@ -157,8 +144,9 @@ document.addEventListener('DOMContentLoaded', () => {
         canvas.width = overlayCanvas.width = viewport.width; canvas.height = overlayCanvas.height = viewport.height;
         await pdfPage.render({ canvasContext: ctx, viewport: viewport }).promise;
         
-        mockupX.value = Math.max(0, (MOCKUP_W - artWidthCm) / 2).toFixed(1);
-        mockupY.value = Math.max(0, (MOCKUP_H - artHeightCm) / 2).toFixed(1);
+        // Exact Default Coordinates Reference 
+        mockupX.value = 30.0;
+        mockupY.value = 32.0;
         validateForm();
     }
 
@@ -223,6 +211,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const destW = cachedArtworkCanvas.width * scaleFactor;
             const destH = cachedArtworkCanvas.height * scaleFactor;
             
+            // Pivot strictly from center map
             const inputX = parseFloat(mockupX.value) * PX_PER_CM * DPR;
             const inputY = parseFloat(mockupY.value) * PX_PER_CM * DPR;
             const destX = inputX - (destW / 2);
@@ -271,7 +260,7 @@ document.addEventListener('DOMContentLoaded', () => {
         toggleMockupBtn.innerText = `Mockup Mode: ${isMockupMode ? 'ON' : 'OFF'}`;
         
         syncToolColors();
-        p1 = p2 = null; isDrawingLine = false; measurementReadout.innerText = "0.00 mm";
+        p1 = p2 = null; isDrawingLine = false; measurementReadout.innerText = "0.00 MM";
         interactCtx.clearRect(0,0, interactCanvas.width, interactCanvas.height);
         renderWorkspace();
     });
@@ -303,7 +292,7 @@ document.addEventListener('DOMContentLoaded', () => {
     resetMeasureBtn.addEventListener('click', () => {
         p1 = p2 = null; isDrawingLine = false;
         interactCtx.clearRect(0,0, interactCanvas.width, interactCanvas.height);
-        measurementReadout.innerText = "0.00 mm";
+        measurementReadout.innerText = "0.00 MM";
     });
 
     measureColor.addEventListener('input', () => {
@@ -367,7 +356,7 @@ document.addEventListener('DOMContentLoaded', () => {
         interactCtx.stroke();
 
         const cssDist = Math.hypot(end.x - start.x, end.y - start.y) / DPR;
-        measurementReadout.innerText = ((cssDist / PX_PER_CM) * 10).toFixed(2) + " mm";
+        measurementReadout.innerText = ((cssDist / PX_PER_CM) * 10).toFixed(2) + " MM";
     }
 
     function updateMagnifier(clientX, clientY) {
@@ -396,13 +385,16 @@ document.addEventListener('DOMContentLoaded', () => {
     
     document.getElementById('close-modal').addEventListener('click', () => {
         actualSizeModal.classList.add('hidden');
-        isMeasuringMode = isDrawingLine = false;
-        p1 = p2 = null; measurementReadout.innerText = "0.00 mm";
+        isMeasuringMode = isDrawingLine = isMockupMode = false;
+        
+        p1 = p2 = null; measurementReadout.innerText = "0.00 MM";
         interactCtx.clearRect(0,0, interactCanvas.width, interactCanvas.height);
         actualSizeContainer.classList.remove('measuring');
         magnifier.classList.add('hidden');
+        document.getElementById('mockup-toolbar').classList.add('hidden');
         
         toggleMeasureBtn.innerText = "Measure: OFF";
+        toggleMockupBtn.innerText = "Mockup Mode: OFF";
         resetMeasureBtn.classList.add('hidden');
         resetMeasureBtn.classList.remove('smooth-in');
         document.getElementById('measure-hint').classList.add('hidden');
