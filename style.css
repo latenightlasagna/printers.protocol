@@ -1,6 +1,3 @@
-/* Imports IBM Plex Sans (Weights 100 through 700) instantly */
-@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@100;200;300;400;500;600;700&display=swap');
-
 :root {
     --bg-color: #b3b6b5; --panel-color: #c5c8c6; --text-color: #000000;
     --border-color: #8c8f8e; --neon-pink: #FF107A; --white: #ffffff;
