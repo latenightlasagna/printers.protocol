@@ -401,47 +401,75 @@ document.addEventListener('DOMContentLoaded', () => {
         syncToolColors();
     });
 
-    // --- 5. WORKER ENGINE LOGIC ---
+    // --- 5. SUPER-SAMPLED WORKER ENGINE ---
     const printMediumDropdown = document.getElementById('print-medium');
     const customStrokeInputVal = document.getElementById('custom-stroke');
     
     const analyzerWorker = new Worker('worker.js');
+    
     analyzeBtn.addEventListener('click', async () => {
-        analyzeBtn.classList.add('hidden'); resultsPanel.classList.add('hidden'); loadingState.classList.remove('hidden');
+        analyzeBtn.classList.add('hidden'); 
+        resultsPanel.classList.add('hidden'); 
+        loadingState.classList.remove('hidden');
         document.getElementById('progress-fill').style.width = '5%';
 
+        // ENGINE UPGRADE: Super-sample at 600 DPI for sub-millimeter precision
+        const ENGINE_DPI = 600; 
         const freshPage = await pdfDocument.getPage(1);
-        const reqScale = ((artWidthCm * CM_TO_INCHES) * TARGET_DPI) / freshPage.getViewport({scale:1}).width;
+        const reqScale = ((artWidthCm * CM_TO_INCHES) * ENGINE_DPI) / freshPage.getViewport({scale:1}).width;
         
         const opt = printMediumDropdown.options[printMediumDropdown.selectedIndex];
         let minStrokeMm = opt.value === 'custom' ? parseFloat(customStrokeInputVal.value) : parseFloat(opt.getAttribute('data-min-stroke'));
         
-        const highResCanvas = document.createElement('canvas'); const viewport = freshPage.getViewport({ scale: reqScale });
-        highResCanvas.width = viewport.width; highResCanvas.height = viewport.height;
+        // Calculate required pixels at 600 DPI
+        const minStrokePixels = minStrokeMm * (ENGINE_DPI / 25.4);
+
+        // Render hyper-resolution canvas offscreen
+        const highResCanvas = document.createElement('canvas'); 
+        const viewport = freshPage.getViewport({ scale: reqScale });
+        highResCanvas.width = viewport.width; 
+        highResCanvas.height = viewport.height;
+        
         await freshPage.render({ canvasContext: highResCanvas.getContext('2d'), viewport: viewport }).promise;
         
-        analyzerWorker.postMessage({ imageData: highResCanvas.getContext('2d').getImageData(0, 0, viewport.width, viewport.height), minStrokePixels: minStrokeMm * (TARGET_DPI / 25.4), targetWidth: viewport.width, targetHeight: viewport.height });
+        analyzerWorker.postMessage({ 
+            imageData: highResCanvas.getContext('2d').getImageData(0, 0, viewport.width, viewport.height), 
+            minStrokePixels: minStrokePixels, 
+            targetWidth: viewport.width, 
+            targetHeight: viewport.height 
+        });
     });
 
     analyzerWorker.onmessage = function(e) {
         if (e.data.type === 'progress') document.getElementById('progress-fill').style.width = `${e.data.percent}%`;
-        if (e.data.type === 'complete') { document.getElementById('progress-fill').style.width = '100%'; setTimeout(() => applyResults(e.data.results), 400); }
+        if (e.data.type === 'complete') { 
+            document.getElementById('progress-fill').style.width = '100%'; 
+            setTimeout(() => applyResults(e.data.results), 400); 
+        }
     };
 
     function applyResults(results) {
-        loadingState.classList.add('hidden'); resultsPanel.classList.remove('hidden');
-        analyzeBtn.classList.remove('hidden'); analyzeBtn.innerText = "Re-Analyze Printfile";
+        loadingState.classList.add('hidden'); 
+        resultsPanel.classList.remove('hidden');
+        analyzeBtn.classList.remove('hidden'); 
+        analyzeBtn.innerText = "Re-Analyze Printfile";
 
         document.getElementById('res-gray').innerText = results.hasGrayscale ? "Failed (Grayscale found)" : "Pass (Pure Black/White)";
         document.getElementById('res-gray').style.color = results.hasGrayscale ? "var(--neon-pink)" : "var(--text-color)";
         document.getElementById('res-stroke').innerText = results.hasThinStrokes ? "Failed (Areas too thin)" : "Pass (Stroke width OK)";
         document.getElementById('res-stroke').style.color = results.hasThinStrokes ? "var(--neon-pink)" : "var(--text-color)";
         
-        const tempCanvas = document.createElement('canvas'); tempCanvas.width = results.width; tempCanvas.height = results.height;
+        // Scale the hyper-res 600 DPI error mask back down to fit the UI preview canvas
+        const tempCanvas = document.createElement('canvas'); 
+        tempCanvas.width = results.width; 
+        tempCanvas.height = results.height;
         tempCanvas.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(results.overlayBuffer), results.width, results.height), 0, 0);
+        
         overlayCanvas.getContext('2d').clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
         overlayCanvas.getContext('2d').drawImage(tempCanvas, 0, 0, overlayCanvas.width, overlayCanvas.height);
     }
 
-    document.getElementById('zebra-meter').addEventListener('change', (e) => { e.target.checked ? overlayCanvas.classList.remove('hidden') : overlayCanvas.classList.add('hidden'); });
+    document.getElementById('zebra-meter').addEventListener('change', (e) => { 
+        e.target.checked ? overlayCanvas.classList.remove('hidden') : overlayCanvas.classList.add('hidden'); 
+    });
 });
