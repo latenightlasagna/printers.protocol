@@ -33,19 +33,38 @@ label { font-size: 0.8rem; font-weight: 600; text-transform: uppercase; display:
 
 input, select { background: var(--bg-color); border: 1px solid var(--border-color); color: var(--text-color); font-family: inherit; padding: 0.75rem; font-size: 0.95rem; outline: none; border-radius: 0; }
 input:focus, select:focus { border-color: var(--text-color); }
-button { font-family: inherit; font-weight: 500; cursor: pointer; border: none; border-radius: 0; transition: all 0.15s ease; padding: 1rem; font-size: 1rem; text-transform: uppercase; }
+button { font-family: inherit; font-weight: 600; cursor: pointer; border: none; border-radius: 0; transition: all 0.15s ease; padding: 1rem; font-size: 1rem; text-transform: uppercase; }
 .btn-secondary { background: transparent; border: 1px solid var(--text-color); color: var(--text-color); }
 .btn-secondary:hover { background: var(--text-color); color: var(--bg-color); }
-.btn-primary { background: var(--text-color); color: var(--bg-color); font-weight: 600; }
+.btn-primary { background: var(--text-color); color: var(--bg-color); }
 .btn-primary:hover:not(:disabled) { background: #333; }
 .btn-primary:disabled { background: var(--border-color); cursor: not-allowed; }
 .btn-small { padding: 0.6rem; font-size: 0.85rem; }
 .w-100 { width: 100%; }
 .hidden { display: none !important; }
 
-/* Dynamic Color Button Logic */
-.btn-dynamic { border-color: currentColor; transition: background-color 0.15s, color 0.15s, border-color 0.15s; }
-.btn-dynamic:hover { background-color: currentColor; color: var(--bg-color) !important; }
+/* 
+ * FLAWLESS DYNAMIC COLOR BUTTON CSS
+ * Driven completely by CSS Variables to prevent hover/inline-style clashes 
+ */
+.btn-dynamic { 
+    --theme-color: var(--text-color); 
+    border: 1px solid var(--theme-color) !important; 
+    color: var(--theme-color) !important; 
+    background-color: transparent !important; 
+    transition: opacity 0.15s, background-color 0.15s, color 0.15s, border-color 0.15s; 
+}
+.btn-dynamic:hover { 
+    background-color: var(--theme-color) !important; 
+    color: var(--bg-color) !important; 
+}
+.btn-dynamic.active { 
+    background-color: var(--theme-color) !important; 
+    color: var(--bg-color) !important; 
+}
+.btn-dynamic.active:hover { 
+    opacity: 0.85; /* Softly darken the filled button on hover instead of reversing */
+}
 
 @keyframes subtleIn {
     0% { opacity: 0; transform: translateX(-8px) scale(0.96); }
@@ -86,7 +105,7 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 14px;
 .tiny-input { width: 70px; padding: 0.4rem; font-size: 0.85rem; }
 
 .readout-box { font-size: 0.8rem; font-weight: 600; text-transform: uppercase; display: flex; align-items: center; gap: 0.5rem; border-left: 1px solid var(--border-color); padding-left: 1rem; margin-left: 0.5rem;}
-#measurement-readout, .readout-small { font-family: 'IBM Plex Sans', monospace; color: #0044FF; font-weight: 600; transition: color 0.15s; }
+#measurement-readout, .readout-small { font-family: 'IBM Plex Sans', monospace; font-weight: 600; transition: color 0.15s; text-transform: uppercase; }
 #measurement-readout { font-size: 1.1rem; background: var(--bg-color); padding: 0.2rem 0.5rem; border: 1px solid var(--border-color); min-width: 90px; text-align: right; }
 .readout-small { font-size: 0.95rem; min-width: 45px; }
 
